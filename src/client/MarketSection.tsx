@@ -1,20 +1,40 @@
 /**
- * The Marketplace tab inside the Plugins settings section.
+ * The Marketplace settings section: its own entry in the Settings navigation,
+ * with two pages of its own.
  *
- * Two states. While the market is off the tab is one card that says what
- * turning it on will do and asks; the switch is the plugin's own durable
- * setting, so the answer survives a restart. While it is on the tab is a
- * searchable, category-filtered shortlist, and each card's action stages a
- * security-review prompt in a new session — it installs nothing itself.
+ * **Plugins** is the community shortlist. While the market is off it is one
+ * card that says what turning it on will do and asks; the switch is the
+ * plugin's own durable setting, so the answer survives a restart. While it is
+ * on, each card's action stages a security-review prompt in a new session —
+ * it installs nothing itself.
+ *
+ * **Skills** is what this deployment can already resolve. It needs neither the
+ * switch nor the network.
+ *
+ * A section (rather than a tab inside the official Plugins page) is what makes
+ * the hand-off complete: the settings shell hands every section a `close`,
+ * so staging the prompt can end with the user looking at the session it was
+ * staged in.
  */
-import { useCallback, useEffect, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useState, type ReactElement } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
-import type { MarketCatalog, MarketPlugin, SafeMarketSettings } from '../contract.ts'
+import type {
+  MarketCatalog,
+  MarketPlugin,
+  MarketSkillsResult,
+  SafeMarketSettings,
+} from '../contract.ts'
+import type { MarketLocale } from './copy.ts'
+import { SkillsView } from './SkillsView.tsx'
 
-/** The live settings snapshot the tab renders from. */
-export interface SafeMarketSettingsSnapshot { readonly value: SafeMarketSettings }
-export type SafeMarketSettingsSource = ObservableSnapshot<SafeMarketSettingsSnapshot>
+/** The live snapshot the section renders from: the switch plus the deployment facts. */
+export interface SafeMarketSnapshot {
+  readonly value: SafeMarketSettings
+  /** The profile an install would change; names `--profile` in the prompt. */
+  readonly profile: string
+}
+export type SafeMarketSource = ObservableSnapshot<SafeMarketSnapshot>
 
 /** What the install hand-off reports back to the card that asked for it. */
 export type InstallOutcome =
@@ -22,21 +42,23 @@ export type InstallOutcome =
   | { readonly ok: false; readonly reason: 'no-workspace' }
   | { readonly ok: false; readonly reason: 'failed'; readonly message: string }
 
-/** Injected business face: the live settings source and the tab's verbs. */
-export interface MarketTabInjected {
-  hooks: { scope: SafeMarketSettingsSource }
+/** Injected business face: the live source and the section's verbs. */
+export interface MarketSectionInjected {
+  hooks: { scope: SafeMarketSource }
   /** Turn the market on or off (durable). */
   setEnabled: (enabled: boolean) => Promise<void>
   /** Read the reduced catalog; `force` bypasses the refresh interval. */
   loadCatalog: (force: boolean) => Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }>
+  /** Read the skills this deployment resolves. */
+  listSkills: () => Promise<MarketSkillsResult>
   /** Open a session in the current or most recent workspace and stage the given prompt. */
   install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>
 }
 
-/** Full tab props: runtime share + injected face + locale seat. */
-export type MarketTabProps =
-  PropsRuntime<'settings.plugins.tab'>
-  & InjectFace<MarketTabInjected>
+/** Full section props: runtime share + injected face + locale seat. */
+export type MarketSectionProps =
+  PropsRuntime<'settings.section'>
+  & InjectFace<MarketSectionInjected>
   & PropsLocale<'settings.safeMarket'>
 
 type CatalogState =
@@ -49,6 +71,8 @@ type CardState =
   | { readonly status: 'busy' }
   | { readonly status: 'staged' }
   | { readonly status: 'error'; readonly message: string }
+
+type Page = 'plugins' | 'skills'
 
 /** `1998` → `2.0k`: a card has room for the magnitude, not the digits. */
 function starCount(stars: number): string {
@@ -65,18 +89,21 @@ function matches(item: MarketPlugin, query: string, category: string, english: b
   return query.split(/\s+/).every(word => haystack.includes(word))
 }
 
-/** The Marketplace tab. */
-export function MarketTab({ useScope, setEnabled, loadCatalog, install, t }: MarketTabProps): ReactElement {
-  const settings = useScope(snapshot => snapshot.value)
-  // The slot props carry a translate function, not a locale tag; the
-  // dictionary names its own language so the category labels and the staged
-  // prompt follow the same setting the rest of the copy does.
-  const english = t('lang') === 'en'
+/** The Plugins page. */
+function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, onInstall }: {
+  t: MarketLocale
+  english: boolean
+  snapshot: SafeMarketSnapshot
+  setEnabled: MarketSectionInjected['setEnabled']
+  loadCatalog: MarketSectionInjected['loadCatalog']
+  cards: Readonly<Record<string, CardState>>
+  onInstall: (target: MarketPlugin, prompt: string) => void
+}): ReactElement {
   const [state, setState] = useState<CatalogState>({ status: 'idle' })
   const [switching, setSwitching] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
-  const [cards, setCards] = useState<Readonly<Record<string, CardState>>>({})
+  const enabled = snapshot.value.enabled
 
   const load = useCallback((force: boolean) => {
     setState(previous => (previous.status === 'ready' ? previous : { status: 'loading' }))
@@ -91,24 +118,24 @@ export function MarketTab({ useScope, setEnabled, loadCatalog, install, t }: Mar
     })
   }, [loadCatalog])
 
-  // The first read happens when the market is switched on, not when the tab
+  // The first read happens when the market is switched on, not when the page
   // mounts: a disabled market must not reach the network at all.
   useEffect(() => {
-    if (!settings.enabled) {
+    if (!enabled) {
       setState({ status: 'idle' })
       return
     }
     load(false)
-  }, [settings.enabled, load])
+  }, [enabled, load])
 
   const toggle = (next: boolean): void => {
     setSwitching(true)
     void setEnabled(next).finally(() => { setSwitching(false) })
   }
 
-  if (!settings.enabled) {
+  if (!enabled) {
     return (
-      <div className="dsh_market_tab">
+      <div className="dsh_market_page">
         <div className="dsh_market_intro">
           <p className="dsh_market_introTitle">{t('intro.title')}</p>
           <p className="dsh_market_introBody">{t('intro.body')}</p>
@@ -134,32 +161,15 @@ export function MarketTab({ useScope, setEnabled, loadCatalog, install, t }: Mar
     : catalog.items.filter(item => matches(item, query.trim().toLocaleLowerCase(), category, english))
 
   const runInstall = (item: MarketPlugin): void => {
-    setCards(previous => ({ ...previous, [item.fullName]: { status: 'busy' } }))
-    void install(item, t('prompt', { url: item.url })).then((outcome) => {
-      setCards(previous => ({
-        ...previous,
-        [item.fullName]: outcome.ok
-          ? { status: 'staged' }
-          : {
-              status: 'error',
-              message: outcome.reason === 'no-workspace'
-                ? t('install.noWorkspace')
-                : t('install.failed', { reason: outcome.message }),
-            },
-      }))
-    }, (error: unknown) => {
-      setCards(previous => ({
-        ...previous,
-        [item.fullName]: {
-          status: 'error',
-          message: t('install.failed', { reason: error instanceof Error ? error.message : String(error) }),
-        },
-      }))
-    })
+    onInstall(item, t('prompt', {
+      url: item.url,
+      profile: snapshot.profile,
+      branch: item.defaultBranch === '' ? 'main' : item.defaultBranch,
+    }))
   }
 
   return (
-    <div className="dsh_market_tab">
+    <div className="dsh_market_page">
       <div className="dsh_market_bar">
         <input
           className="dsh_market_search"
@@ -285,6 +295,96 @@ export function MarketTab({ useScope, setEnabled, loadCatalog, install, t }: Mar
           {state.status === 'ready' && state.stale ? ` · ${t('stale')}` : ''}
         </p>
       )}
+    </div>
+  )
+}
+
+/** The Marketplace section. */
+export function MarketSection({
+  useScope, setEnabled, loadCatalog, listSkills, install, close, t,
+}: MarketSectionProps): ReactElement {
+  const snapshot = useScope(value => value)
+  // The slot props carry a translate function, not a locale tag; the
+  // dictionary names its own language so the category labels and the staged
+  // prompt follow the same setting the rest of the copy does.
+  const english = t('lang') === 'en'
+  const [page, setPage] = useState<Page>('plugins')
+  const [cards, setCards] = useState<Readonly<Record<string, CardState>>>({})
+  const tabsId = useId()
+
+  const report = (fullName: string, next: CardState): void => {
+    setCards(previous => ({ ...previous, [fullName]: next }))
+  }
+
+  const runInstall = (target: MarketPlugin, prompt: string): void => {
+    report(target.fullName, { status: 'busy' })
+    void install(target, prompt).then((outcome) => {
+      if (outcome.ok) {
+        report(target.fullName, { status: 'staged' })
+        // The prompt is staged in a session the user cannot see from here.
+        // Closing is the second half of the hand-off, not a courtesy.
+        close()
+        return
+      }
+      report(target.fullName, {
+        status: 'error',
+        message: outcome.reason === 'no-workspace'
+          ? t('install.noWorkspace')
+          : t('install.failed', { reason: outcome.message }),
+      })
+    }, (error: unknown) => {
+      report(target.fullName, {
+        status: 'error',
+        message: t('install.failed', { reason: error instanceof Error ? error.message : String(error) }),
+      })
+    })
+  }
+
+  const pages: readonly { id: Page; label: string }[] = [
+    { id: 'plugins', label: t('tab.plugins') },
+    { id: 'skills', label: t('tab.skills') },
+  ]
+
+  return (
+    <div className="dsh_market_section">
+      <h2 className="dsh_market_heading">{t('nav')}</h2>
+      <div className="dsh_market_tabs" role="tablist" aria-label={t('tabs.aria')}>
+        {pages.map(entry => (
+          <button
+            key={entry.id}
+            id={`${tabsId}-tab-${entry.id}`}
+            type="button"
+            role="tab"
+            className="dsh_market_tab"
+            aria-selected={page === entry.id}
+            aria-controls={`${tabsId}-panel-${entry.id}`}
+            data-active={page === entry.id ? 'true' : undefined}
+            tabIndex={page === entry.id ? 0 : -1}
+            onClick={() => { setPage(entry.id) }}
+          >
+            {entry.label}
+          </button>
+        ))}
+      </div>
+      <div
+        id={`${tabsId}-panel-${page}`}
+        role="tabpanel"
+        aria-labelledby={`${tabsId}-tab-${page}`}
+      >
+        {page === 'plugins'
+          ? (
+            <PluginsPage
+              t={t}
+              english={english}
+              snapshot={snapshot}
+              setEnabled={setEnabled}
+              loadCatalog={loadCatalog}
+              cards={cards}
+              onInstall={runInstall}
+            />
+            )
+          : <SkillsView t={t} listSkills={listSkills} />}
+      </div>
     </div>
   )
 }

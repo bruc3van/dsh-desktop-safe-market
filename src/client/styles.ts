@@ -12,12 +12,64 @@ export const STYLE_ID = 'dsh-desktop-safe-market-style'
 
 /** The market tab's injected stylesheet text. */
 export const cssText = `
-.dsh_market_tab {
+.dsh_market_section {
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-width: 760px;
   color: var(--dsw-alias-label-primary);
+}
+.dsh_market_heading {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+}
+/* The section's own page strip, in the official tab language. */
+.dsh_market_tabs {
+  display: flex;
+  align-items: flex-end;
+  gap: 22px;
+  margin-top: 2px;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+.dsh_market_tab {
+  position: relative;
+  padding: 7px 1px 9px;
+  border: 0;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 13px;
+  line-height: 20px;
+  cursor: pointer;
+}
+.dsh_market_tab:hover,
+.dsh_market_tab[data-active="true"] {
+  color: var(--dsw-alias-label-primary);
+}
+.dsh_market_tab[data-active="true"]::after,
+.dsh_market_tab:focus-visible::after {
+  content: "";
+  position: absolute;
+  right: 0;
+  bottom: -1px;
+  left: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--dsw-alias-label-primary);
+}
+.dsh_market_tab:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+  color: var(--dsw-alias-label-primary);
+}
+.dsh_market_page {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+  padding-top: 12px;
 }
 
 /* The off state: one card that explains itself and asks. */

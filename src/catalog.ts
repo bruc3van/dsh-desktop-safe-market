@@ -34,6 +34,7 @@ const SELF_EXCLUDED = new Set([
 ])
 
 interface RawRepository {
+  default_branch?: unknown
   full_name?: unknown
   description?: unknown
   category?: unknown
@@ -47,12 +48,27 @@ interface RawRepository {
   pushed_at?: unknown
 }
 
+/**
+ * Where a reduction survives a restart. The catalog source neither opens nor
+ * closes this — the plugin body owns the domain's lifecycle and hands the
+ * source a narrow port, so a deployment without durable storage can still run
+ * the market from memory alone.
+ */
+export interface CatalogCache {
+  /** The last reduction and the ETags it was derived with. */
+  read: () => { catalog: MarketCatalog | null; repositoriesEtag: string; curatedEtag: string }
+  /** Persist a fresh reduction. Failures are the cache's own business. */
+  write: (next: { catalog: MarketCatalog; repositoriesEtag: string; curatedEtag: string }) => void
+}
+
 /** Deployment-varying knobs the plugin config owns. */
 export interface CatalogOptions {
   /** Base URL holding `repositories.json` and `curated.json`. */
   readonly base: string
   /** How many plugins the market shows. */
   readonly marketSize: number
+  /** Durable seat for the reduction; absent means memory-only. */
+  readonly cache?: CatalogCache
 }
 
 function text(value: unknown, limit: number): string {
@@ -152,6 +168,7 @@ export function deriveCatalog(
       language: text(row.language, 40),
       license: text(row.license, 40),
       pushedAt: text(row.pushed_at, 30),
+      defaultBranch: text(row.default_branch, 100),
       category,
       categoryZh: text(row.category_zh, 60) || category,
       categoryEn: text(row.category_en, 60) || category,
@@ -195,18 +212,17 @@ export interface CatalogSource {
 
 /**
  * Build the catalog reader.
- *
- * The cache is in memory only, which is the honest bound of a plugin that
- * owns no storage: a Host restart costs one full read. Within a session the
- * crawl is asked conditionally, so a reopened tab costs two 304s.
- * @param options - the base URL and the market size.
+ * @param options - the base URL, the market size, and the durable seat.
  * @returns the reader.
  */
 export function createCatalogSource(options: CatalogOptions): CatalogSource {
   const base = options.base.replace(/\/+$/, '')
-  let catalog: MarketCatalog | null = null
-  let repositoriesEtag = ''
-  let curatedEtag = ''
+  // Seeded from the durable seat, so the very first read after a restart is
+  // already conditional rather than a full download.
+  const seed = options.cache?.read() ?? { catalog: null, repositoriesEtag: '', curatedEtag: '' }
+  let catalog: MarketCatalog | null = seed.catalog
+  let repositoriesEtag = seed.repositoriesEtag
+  let curatedEtag = seed.curatedEtag
   let inFlight: Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }> | null = null
 
   const fresh = (): boolean => {
@@ -229,6 +245,7 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
       ])
       if (repositories.status === 304 && curatedResponse.status === 304) {
         catalog = { ...catalog, refreshedAt: new Date().toISOString() }
+        options.cache?.write({ catalog, repositoriesEtag, curatedEtag })
         return { catalog, stale: false, error: '' }
       }
     }
@@ -242,6 +259,7 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
     catalog = deriveCatalog(await repositories.json(), await curatedResponse.json(), options.marketSize)
     repositoriesEtag = repositories.headers.get('etag') ?? ''
     curatedEtag = curatedResponse.headers.get('etag') ?? ''
+    options.cache?.write({ catalog, repositoriesEtag, curatedEtag })
     return { catalog, stale: false, error: '' }
   }
 

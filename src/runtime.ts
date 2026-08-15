@@ -12,7 +12,14 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { CatalogSource } from './catalog.ts'
-import type { MarketCatalogResult, SafeMarketSettings, SafeMarketSettingsUpdate } from './contract.ts'
+import type { SkillReadAgent } from './skills.ts'
+import type {
+  MarketCatalogResult,
+  MarketEnvironment,
+  MarketSkillsResult,
+  SafeMarketSettings,
+  SafeMarketSettingsUpdate,
+} from './contract.ts'
 
 /** Market service: the reduced catalog and the plugin's durable settings. */
 export class SafeMarketRuntime extends TypertRemoteService {
@@ -28,8 +35,35 @@ export class SafeMarketRuntime extends TypertRemoteService {
     private readonly catalog: CatalogSource,
     private readonly readSettings: () => SafeMarketSettings,
     private readonly writeSettings: (update: SafeMarketSettingsUpdate) => Promise<SafeMarketSettings>,
+    private readonly readSkills: (agent: SkillReadAgent, signal: AbortSignal) => Promise<MarketSkillsResult>,
+    private readonly environment: MarketEnvironment,
   ) {
     super(ctx, 'safeMarket')
+  }
+
+  /**
+   * The deployment facts the browser needs to NAME the install command —
+   * which profile an install would change. This plugin never runs it.
+   */
+  @Remote
+  describe(): MarketEnvironment {
+    return this.environment
+  }
+
+  /**
+   * The skills the addressed session can currently resolve.
+   *
+   * Read-only, and deliberately not gated on the market switch: listing what
+   * is already installed reaches nothing outside this machine, so it answers
+   * whether or not the user has turned the catalog on.
+   * @param agent - the live agent resolved from the `agentId` wire field; its
+   *   scope chain selects the layers, its session header the workspace.
+   * @param signal - caller lifetime; discovery races it.
+   * @returns the merged skill list, and whether discovery was complete.
+   */
+  @Remote
+  async listSkills(agent: SkillReadAgent, signal: AbortSignal): Promise<MarketSkillsResult> {
+    return await this.readSkills(agent, signal)
   }
 
   /** Read the resolved durable settings through the plugin-owned wire. */

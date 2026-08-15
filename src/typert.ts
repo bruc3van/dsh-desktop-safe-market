@@ -31,6 +31,16 @@ export const TYPERT_MANIFEST: TypertContribution = {
           },
           {
             kind: 'method',
+            name: 'listSkills',
+            signature: 'listSkills(agent: Agent, signal: AbortSignal): Promise<MarketSkillsResult>',
+          },
+          {
+            kind: 'method',
+            name: 'describe',
+            signature: 'describe(): MarketEnvironment',
+          },
+          {
+            kind: 'method',
             name: 'getSettings',
             signature: 'getSettings(): SafeMarketSettings',
           },

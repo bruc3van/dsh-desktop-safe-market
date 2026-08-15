@@ -24,16 +24,18 @@ import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { IConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   MarketCatalogResult,
+  MarketEnvironment,
   MarketPlugin,
+  MarketSkillsResult,
   SafeMarketSettings,
   SafeMarketSettingsUpdate,
 } from '../contract.ts'
 import { SAFE_MARKET_REMOTE } from './remote.ts'
-import { MarketTab, type InstallOutcome, type MarketTabInjected } from './MarketTab.tsx'
+import { MarketSection, type InstallOutcome, type MarketSectionInjected } from './MarketSection.tsx'
 import { en, zh, type SafeMarketLocaleKey } from './locales.ts'
 import { adoptStyles } from './styles.ts'
 
-export type { MarketTabInjected, MarketTabProps, InstallOutcome } from './MarketTab.tsx'
+export type { MarketSectionInjected, MarketSectionProps, InstallOutcome } from './MarketSection.tsx'
 export type { SafeMarketLocaleKey } from './locales.ts'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
@@ -56,11 +58,16 @@ const SCOPE_POLL_MS = 60
 /** The mounted safeMarket namespace service's callable face. */
 interface SafeMarketFace {
   getCatalog(force: boolean, signal?: AbortSignal): Promise<{ ok: true; value: MarketCatalogResult } | { ok: false; error: { code: string; message: string } }>
+  listSkills(agentId: string, signal?: AbortSignal): Promise<{ ok: true; value: MarketSkillsResult } | { ok: false; error: { code: string; message: string } }>
+  describe(): Promise<{ ok: true; value: MarketEnvironment } | { ok: false; error: { code: string; message: string } }>
   getSettings(): Promise<{ ok: true; value: SafeMarketSettings } | { ok: false; error: { code: string; message: string } }>
   updateSettings(update: SafeMarketSettingsUpdate): Promise<{ ok: true; value: SafeMarketSettings } | { ok: false; error: { code: string; message: string } }>
 }
 
 const defaultSettings = (): SafeMarketSettings => ({ enabled: false })
+
+/** Sentinel the skills page turns into its own localized copy. */
+export const NO_SESSION = 'no-session'
 
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => { setTimeout(resolve, ms) })
@@ -74,7 +81,7 @@ export function apply(ctx: ClientContext): void {
   adoptStyles()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-desktop-safe-market: dictionaries')
 
-  const scope = createSnapshotStore({ value: defaultSettings() })
+  const scope = createSnapshotStore({ value: defaultSettings(), profile: 'web' })
   let settingsGeneration = 0
 
   const reportError = (operation: string, error: unknown): void => {
@@ -98,9 +105,29 @@ export function apply(ctx: ClientContext): void {
         reportError('settings read', result.error)
         return
       }
-      scope.set({ value: result.value })
+      scope.set({ ...scope.getSnapshot(), value: result.value })
     } catch (error) {
       if (market === remote && generation === settingsGeneration) reportError('settings read', error)
+    }
+  }
+
+  /**
+   * The deployment facts the install prompt needs. Read once per mount: the
+   * profile a Host boots does not change under a running client.
+   */
+  const loadEnvironment = async (): Promise<void> => {
+    const remote = market
+    if (remote === undefined) return
+    try {
+      const result = await remote.describe()
+      if (market !== remote) return
+      if (!result.ok) {
+        reportError('describe', result.error)
+        return
+      }
+      scope.set({ ...scope.getSnapshot(), profile: result.value.profile })
+    } catch (error) {
+      if (market === remote) reportError('describe', error)
     }
   }
 
@@ -110,7 +137,7 @@ export function apply(ctx: ClientContext): void {
     if (market === undefined) {
       throw new Error('dsh-desktop-safe-market: the safeMarket Remote namespace did not mount')
     }
-    await loadSettings()
+    await Promise.all([loadSettings(), loadEnvironment()])
     return () => {
       settingsGeneration += 1
       market = undefined
@@ -136,10 +163,29 @@ export function apply(ctx: ClientContext): void {
         reportError('settings update', result.error)
         return
       }
-      scope.set({ value: result.value })
+      scope.set({ ...scope.getSnapshot(), value: result.value })
     } catch (error) {
       if (market === remote && generation === settingsGeneration) reportError('settings update', error)
     }
+  }
+
+  /**
+   * The skills read is addressed by the current session, not by the plugin's
+   * root context. The registry is host+per-scope layered and the web
+   * deployment leaves local discovery to whichever agent preset a session
+   * runs, so only a session's scope chain can answer what the user actually
+   * has. With no session open there is nothing to address, and saying so is
+   * the honest answer.
+   */
+  const listSkills = async (): Promise<MarketSkillsResult> => {
+    const remote = market
+    if (remote === undefined) throw new Error('the safeMarket Remote is not mounted')
+    const sessions = ctx.get('sessions') as unknown as ISessions
+    const current = sessions.list.getSnapshot().current
+    if (current === undefined) return { skills: [], complete: true, error: NO_SESSION }
+    const result = await remote.listSkills(current as unknown as string)
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    return result.value
   }
 
   const loadCatalog = async (force: boolean): Promise<MarketCatalogResult> => {
@@ -195,18 +241,24 @@ export function apply(ctx: ClientContext): void {
 
   const t = ctx.locale.bind(NS)
 
-  ctx.slots.inject('settings.plugins.tab', () => ctx.slots.register({
-    name: 'settings.plugins.tab',
+  // A section of its own rather than a tab inside the official Plugins page:
+  // the settings shell hands every section a `close`, and closing is the
+  // second half of the install hand-off (the prompt is staged in a session
+  // this window is covering).
+  ctx.slots.inject('settings.section', () => ctx.slots.register({
+    name: 'settings.section',
     id: 'safe-market',
-    // After the shipped configuration (0) and inventory (10) tabs.
-    order: 20,
-    label: () => t('tab'),
+    // After the shipped sections (General 0, Plugins 15, …), beside the
+    // other feature-owned entries.
+    order: 60,
+    label: () => t('nav'),
     locale: NS,
-    inject: (): MarketTabInjected => ({
+    inject: (): MarketSectionInjected => ({
       hooks: { scope },
       setEnabled,
       loadCatalog,
+      listSkills,
       install,
     }),
-  }, MarketTab))
+  }, MarketSection))
 }

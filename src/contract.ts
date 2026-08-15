@@ -27,6 +27,8 @@ export interface MarketPlugin {
   readonly license: string
   /** ISO date of the last push, for the "still maintained" read. */
   readonly pushedAt: string
+  /** The repository's default branch — the install command's fallback ref. */
+  readonly defaultBranch: string
   readonly category: string
   readonly categoryZh: string
   readonly categoryEn: string
@@ -61,6 +63,40 @@ export interface MarketCatalogResult {
   readonly error: string
 }
 
+/** One skill this deployment can currently resolve. */
+export interface MarketSkill {
+  readonly name: string
+  readonly description: string
+  readonly whenToUse: string
+  /** The provider that owns the skill body (`filesystem`, `runtime`, …). */
+  readonly provider: string
+  /** Whether the model may invoke it on its own. */
+  readonly modelInvocable: boolean
+  /** Whether the user may invoke it with `/name`. */
+  readonly userInvocable: boolean
+}
+
+/** Wire codec: one session identity (branded string on the wire). */
+export const sessionIdSchema = z.string().min(1)
+
+/** A skills read: the answer, or the reason there is none. */
+export interface MarketSkillsResult {
+  readonly skills: readonly MarketSkill[]
+  /** False when a provider failed or reported incomplete discovery. */
+  readonly complete: boolean
+  readonly error: string
+}
+
+/**
+ * What the browser needs to name the install command. The profile is a
+ * deployment fact (the Host is the only side that knows which profile it
+ * boots), and the command is the official one — this plugin never runs it.
+ */
+export interface MarketEnvironment {
+  /** The profile whose plugins an install would change. */
+  readonly profile: string
+}
+
 /** The `safe-market` settings namespace's durable shape. */
 export interface SafeMarketSettings {
   /**
@@ -84,6 +120,7 @@ export const marketPluginSchema = z.object({
   language: z.string(),
   license: z.string(),
   pushedAt: z.string(),
+  defaultBranch: z.string(),
   category: z.string().min(1),
   categoryZh: z.string(),
   categoryEn: z.string(),
@@ -99,8 +136,8 @@ export const marketCategorySchema = z.object({
 
 /** Strict wire codec for the reduced catalog. */
 export const marketCatalogSchema = z.object({
-  items: z.array(marketPluginSchema),
-  categories: z.array(marketCategorySchema),
+  items: z.array(marketPluginSchema).readonly(),
+  categories: z.array(marketCategorySchema).readonly(),
   fetchedAt: z.string(),
   refreshedAt: z.string(),
   scanned: z.number().int().min(0),
@@ -111,6 +148,28 @@ export const marketCatalogResultSchema = z.object({
   catalog: z.union([marketCatalogSchema, z.null()]),
   stale: z.boolean(),
   error: z.string(),
+}).readonly()
+
+/** Strict wire codec for one resolvable skill. */
+export const marketSkillSchema = z.object({
+  name: z.string().min(1),
+  description: z.string(),
+  whenToUse: z.string(),
+  provider: z.string(),
+  modelInvocable: z.boolean(),
+  userInvocable: z.boolean(),
+}).readonly()
+
+/** Strict wire codec for one skills read. */
+export const marketSkillsResultSchema = z.object({
+  skills: z.array(marketSkillSchema).readonly(),
+  complete: z.boolean(),
+  error: z.string(),
+}).readonly()
+
+/** Strict wire codec for the deployment facts the browser needs. */
+export const marketEnvironmentSchema = z.object({
+  profile: z.string(),
 }).readonly()
 
 /** Strict wire codec for the resolved settings section. */
@@ -148,6 +207,43 @@ export const SAFE_MARKET_INVOCATIONS: readonly InvocationDescriptor[] = [
       mode: 'strict',
       typeSymbol: 'dsh-desktop-safe-market#MarketCatalogResult',
       schema: marketCatalogResultSchema,
+    },
+  },
+  {
+    id: 'dsh-desktop-safe-market#safeMarket/listSkills',
+    service: 'safeMarket',
+    namespace: 'safeMarket',
+    method: 'listSkills',
+    invocation: { kind: 'direct' },
+    parameters: [
+      {
+        name: 'agent',
+        wire: 'agentId',
+        source: 'lookup',
+        lookup: 'agent',
+        // The type symbol must equal the agent lookup provider's wire identity
+        // exactly — the gateway's strict path rejects a mismatched symbol.
+        codec: { mode: 'strict', typeSymbol: '@deepseek-ai/dsh-session/types#SessionId', schema: sessionIdSchema },
+      },
+    ],
+    cancellation: { parameter: 'signal' },
+    result: {
+      mode: 'strict',
+      typeSymbol: 'dsh-desktop-safe-market#MarketSkillsResult',
+      schema: marketSkillsResultSchema,
+    },
+  },
+  {
+    id: 'dsh-desktop-safe-market#safeMarket/describe',
+    service: 'safeMarket',
+    namespace: 'safeMarket',
+    method: 'describe',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: {
+      mode: 'strict',
+      typeSymbol: 'dsh-desktop-safe-market#MarketEnvironment',
+      schema: marketEnvironmentSchema,
     },
   },
   {
