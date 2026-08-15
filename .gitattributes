@@ -1,0 +1,13 @@
+# GitHub's source archive (archive/refs/tags/*.tar.gz) is what
+# `dsh plugin --profile <name> add <url>` installs, and npm's `files` field
+# does not apply to it. Everything a consumer cannot execute is therefore
+# excluded from the archive here: sources, screenshots, and build config all
+# ship in the repository but never inside an installation.
+src/ export-ignore
+assets/ export-ignore
+build.mjs export-ignore
+tsconfig.json export-ignore
+pnpm-workspace.yaml export-ignore
+pnpm-lock.yaml export-ignore
+.gitignore export-ignore
+.gitattributes export-ignore
