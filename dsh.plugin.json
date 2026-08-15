@@ -4,9 +4,17 @@
   "version": "0.1.2",
   "entry": {
     "name": "dsh-desktop-safe-market",
-    "inject": []
+    "inject": [
+      "typert",
+      "settings",
+      "skills",
+      "storageDomain"
+    ]
   },
   "client": {
     "platform": "web"
+  },
+  "bundle": {
+    "patch": "./cordis.patch.yml"
   }
 }

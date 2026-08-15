@@ -12,14 +12,14 @@ declare module '@deepseek-ai/dsh-typert-protocol' {
     /** The `safeMarket` namespace face mounted under `ctx.remote.safeMarket`. */
     interface TypertRemoteNamespace$736166654d61726b6574 {
         getCatalog: (force: boolean, signal?: AbortSignal) => Promise<RemoteResult<MarketCatalogResult>>;
-        listSkills: (signal?: AbortSignal) => Promise<RemoteResult<MarketSkillsResult>>;
+        listSkills: (agentId: string, signal?: AbortSignal) => Promise<RemoteResult<MarketSkillsResult>>;
         describe: () => Promise<RemoteResult<MarketEnvironment>>;
         getSettings: () => Promise<RemoteResult<SafeMarketSettings>>;
         updateSettings: (update: SafeMarketSettingsUpdate) => Promise<RemoteResult<SafeMarketSettings>>;
     }
     interface TypertRemoteMap {
         'safeMarket/getCatalog': (force: boolean, signal?: AbortSignal) => Promise<RemoteResult<MarketCatalogResult>>;
-        'safeMarket/listSkills': (signal?: AbortSignal) => Promise<RemoteResult<MarketSkillsResult>>;
+        'safeMarket/listSkills': (agentId: string, signal?: AbortSignal) => Promise<RemoteResult<MarketSkillsResult>>;
         'safeMarket/describe': () => Promise<RemoteResult<MarketEnvironment>>;
         'safeMarket/getSettings': () => Promise<RemoteResult<SafeMarketSettings>>;
         'safeMarket/updateSettings': (update: SafeMarketSettingsUpdate) => Promise<RemoteResult<SafeMarketSettings>>;

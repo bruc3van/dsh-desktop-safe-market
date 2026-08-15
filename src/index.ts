@@ -86,7 +86,11 @@ export function apply(ctx: Context, config?: Config): void {
   const settings = registerSafeMarketSettings(ctx)
   const readSettings = () => settings.get()
   const writeSettings = async (update: SafeMarketSettingsUpdate) => {
-    await settings.update({ enabled: update.value })
+    // Write the field the update names. The wire codec (a discriminated
+    // union) has already rejected any unknown field, so the computed key can
+    // only be a real one — and the day a second field joins the union, it is
+    // written under its own name instead of silently becoming `enabled`.
+    await settings.update({ [update.field]: update.value })
     return settings.get()
   }
 
@@ -95,10 +99,13 @@ export function apply(ctx: Context, config?: Config): void {
   // first moments of boot reads the network once instead of failing.
   let state: SafeMarketDomainState = initialDomainState
   let persist: ((next: SafeMarketDomainState) => void) | undefined
+  // A stored reduction answers a different question than the current config
+  // asked, so only adopt state cut with the same market size and base.
+  const usable = (candidate: SafeMarketDomainState): boolean =>
+    candidate.catalog !== null && candidate.marketSize === resolved.marketSize && candidate.catalogBase === resolved.catalogBase
   const cache: CatalogCache = {
     read: () => (
-      // A reduction cut with different settings answers a different question.
-      state.catalog !== null && state.marketSize === resolved.marketSize && state.catalogBase === resolved.catalogBase
+      usable(state)
         ? { catalog: state.catalog, repositoriesEtag: state.repositoriesEtag, curatedEtag: state.curatedEtag }
         : { catalog: null, repositoriesEtag: '', curatedEtag: '' }
     ),
@@ -115,21 +122,36 @@ export function apply(ctx: Context, config?: Config): void {
   }
 
   ctx.effect(async () => {
-    const domain = await ctx.storageDomain.open(safeMarketDomainSpec)
-    const stored = domain.global.get()
-    // Only adopt what the source has not already replaced: a read that landed
-    // while the domain was opening is newer than anything on disk.
-    if (state.catalog === null) state = stored
-    persist = (next) => {
-      // Durability is an optimization, and a failed write must not take the
-      // market down with it — the reduction is still in memory either way.
-      void domain.global.set(next).catch((error: unknown) => {
-        console.warn('[dsh-desktop-safe-market] catalog cache write failed:', error)
-      })
-    }
-    return () => {
-      persist = undefined
-      void domain.close()
+    try {
+      const domain = await ctx.storageDomain.open(safeMarketDomainSpec)
+      persist = (next) => {
+        // Durability is an optimization, and a failed write must not take the
+        // market down with it — the reduction is still in memory either way.
+        void domain.global.set(next).catch((error: unknown) => {
+          console.warn('[dsh-desktop-safe-market] catalog cache write failed:', error)
+        })
+      }
+      const stored = domain.global.get()
+      if (state.catalog === null) {
+        // Nothing landed while the domain was opening: adopt the disk when it
+        // answers the current config's question.
+        if (usable(stored)) state = stored
+      } else {
+        // A read landed while the domain was opening. It is newer than
+        // anything on disk but its write happened before `persist` existed —
+        // flush it now instead of losing it until the next refresh.
+        persist(state)
+      }
+      return () => {
+        persist = undefined
+        void domain.close()
+      }
+    } catch (error) {
+      // A damaged or version-mismatched store must not take the market down
+      // with it: the catalog and the skills page still run from memory, and
+      // the next successful read simply cannot survive the restart.
+      console.warn('[dsh-desktop-safe-market] catalog cache unavailable, running memory-only:', error)
+      return () => { persist = undefined }
     }
   }, 'dsh-desktop-safe-market: catalog cache')
 

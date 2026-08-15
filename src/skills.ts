@@ -33,7 +33,10 @@ interface SkillRegistryFace {
 function text(value: unknown, limit: number): string {
   if (typeof value !== 'string') return ''
   const trimmed = value.replace(/\s+/g, ' ').trim()
-  return trimmed.length > limit ? `${trimmed.slice(0, limit - 1)}…` : trimmed
+  // Cut by code point, not by UTF-16 unit, so a limit landing inside a
+  // surrogate pair cannot leave a lone half behind.
+  const points = [...trimmed]
+  return points.length > limit ? `${points.slice(0, limit - 1).join('')}…` : trimmed
 }
 
 /** The addressed agent, structurally: its scope key and its workspace. */

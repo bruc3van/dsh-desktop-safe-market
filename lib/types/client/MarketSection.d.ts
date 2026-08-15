@@ -23,13 +23,21 @@ import type { MarketCatalog, MarketPlugin, MarketSkillsResult, SafeMarketSetting
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
 export interface SafeMarketSnapshot {
     readonly value: SafeMarketSettings;
-    /** The profile an install would change; names `--profile` in the prompt. */
-    readonly profile: string;
+    /**
+     * The profile an install would change; names `--profile` in the prompt.
+     * Null until the Host's `describe` has answered — the install button stays
+     * disabled while it is, because naming the wrong profile in the official
+     * command would hand the user a command aimed at someone else's deployment.
+     */
+    readonly profile: string | null;
 }
 export type SafeMarketSource = ObservableSnapshot<SafeMarketSnapshot>;
 /** What the install hand-off reports back to the card that asked for it. */
 export type InstallOutcome = {
     readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: 'not-ready';
 } | {
     readonly ok: false;
     readonly reason: 'no-workspace';

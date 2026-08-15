@@ -12,6 +12,25 @@
  */
 import { z } from 'zod';
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol';
+/**
+ * The only `owner/name` shape the market keeps. The repository link is
+ * rebuilt on the Host from a slug matching this pattern, and the wire codec
+ * enforces the same shape, so the "host rebuilds the href" invariant is held
+ * by the contract rather than by a comment.
+ */
+export declare const REPOSITORY_SLUG_PATTERN: RegExp;
+/**
+ * The only branch-name shape the review prompt may interpolate. Branches are
+ * remote text from a public snapshot: anything outside this pattern (no
+ * whitespace, no punctuation beyond `._/-`) could inject instructions into
+ * the prompt or steer the tarball path, so the Host falls back to `main` for
+ * it. The trailing checks mirror the git ref rules GitHub enforces: no `..`
+ * anywhere, no segment may be `.` or end in `.`/`.lock`, and the name must
+ * not end in `/` or `.`.
+ */
+export declare const BRANCH_PATTERN: RegExp;
+/** Whether a trimmed branch name is safe to interpolate into the prompt. */
+export declare function isSafeBranchName(value: string): boolean;
 /** One row of the market: a community plugin the catalog kept. */
 export interface MarketPlugin {
     /** `owner/name`, the catalog's identity for the entry. */

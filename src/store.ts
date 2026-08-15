@@ -32,12 +32,17 @@ export const safeMarketDomainState = z.object({
 /** Durable market state inferred from {@link safeMarketDomainState}. */
 export type SafeMarketDomainState = z.infer<typeof safeMarketDomainState>
 
-/** The empty state a first run opens with. */
+/**
+ * The empty state a first run opens with. It satisfies the domain schema
+ * (`marketSize` is at least 1) even though nothing here is ever persisted:
+ * the initial state is only the memory answer before the first read, and a
+ * value the schema rejects would break any future path that validates it.
+ */
 export const initialDomainState: SafeMarketDomainState = {
   catalog: null,
   repositoriesEtag: '',
   curatedEtag: '',
-  marketSize: 0,
+  marketSize: 1,
   catalogBase: '',
 }
 

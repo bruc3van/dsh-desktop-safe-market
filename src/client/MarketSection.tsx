@@ -16,7 +16,7 @@
  * so staging the prompt can end with the user looking at the session it was
  * staged in.
  */
-import { useCallback, useEffect, useId, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
@@ -31,14 +31,20 @@ import { SkillsView } from './SkillsView.tsx'
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
 export interface SafeMarketSnapshot {
   readonly value: SafeMarketSettings
-  /** The profile an install would change; names `--profile` in the prompt. */
-  readonly profile: string
+  /**
+   * The profile an install would change; names `--profile` in the prompt.
+   * Null until the Host's `describe` has answered — the install button stays
+   * disabled while it is, because naming the wrong profile in the official
+   * command would hand the user a command aimed at someone else's deployment.
+   */
+  readonly profile: string | null
 }
 export type SafeMarketSource = ObservableSnapshot<SafeMarketSnapshot>
 
 /** What the install hand-off reports back to the card that asked for it. */
 export type InstallOutcome =
   | { readonly ok: true }
+  | { readonly ok: false; readonly reason: 'not-ready' }
   | { readonly ok: false; readonly reason: 'no-workspace' }
   | { readonly ok: false; readonly reason: 'failed'; readonly message: string }
 
@@ -90,30 +96,44 @@ function matches(item: MarketPlugin, query: string, category: string, english: b
 }
 
 /** The Plugins page. */
-function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, onInstall }: {
+function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, installBusy, onInstall }: {
   t: MarketLocale
   english: boolean
   snapshot: SafeMarketSnapshot
   setEnabled: MarketSectionInjected['setEnabled']
   loadCatalog: MarketSectionInjected['loadCatalog']
   cards: Readonly<Record<string, CardState>>
+  installBusy: boolean
   onInstall: (target: MarketPlugin, prompt: string) => void
 }): ReactElement {
   const [state, setState] = useState<CatalogState>({ status: 'idle' })
   const [switching, setSwitching] = useState(false)
+  // A force refresh from `ready` keeps showing the catalog, so the busy
+  // answer is a separate flag rather than the `loading` status.
+  const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
   const enabled = snapshot.value.enabled
+  // The section keeps this page mounted across tab switches (see
+  // MarketSection), but the settings shell can still unmount the whole
+  // section mid-read — the guard stops the late answer from touching state.
+  const mounted = useRef(true)
+  useEffect(() => () => { mounted.current = false }, [])
 
   const load = useCallback((force: boolean) => {
     setState(previous => (previous.status === 'ready' ? previous : { status: 'loading' }))
+    if (force) setRefreshing(true)
     void loadCatalog(force).then((result) => {
+      if (!mounted.current) return
+      setRefreshing(false)
       if (result.catalog === null) {
         setState({ status: 'error', message: result.error })
         return
       }
       setState({ status: 'ready', catalog: result.catalog, stale: result.stale })
     }, (error: unknown) => {
+      if (!mounted.current) return
+      setRefreshing(false)
       setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
     })
   }, [loadCatalog])
@@ -161,10 +181,18 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, onI
     : catalog.items.filter(item => matches(item, query.trim().toLocaleLowerCase(), category, english))
 
   const runInstall = (item: MarketPlugin): void => {
+    // The profile is what names the install command's target; until the Host
+    // confirmed it, staging a prompt would write a command aimed at the
+    // wrong deployment. The button is disabled in that state, and this
+    // guard keeps the verb honest even if the click races the describe.
+    const profile = snapshot.profile
+    if (profile === null) return
     onInstall(item, t('prompt', {
       url: item.url,
-      profile: snapshot.profile,
-      branch: item.defaultBranch === '' ? 'main' : item.defaultBranch,
+      profile,
+      // The Host reduces defaultBranch to a safe pattern (falling back to
+      // `main`), so the interpolated value can only be a branch name.
+      branch: item.defaultBranch,
     }))
   }
 
@@ -182,10 +210,10 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, onI
         <button
           type="button"
           className="dsh_market_ghost"
-          disabled={state.status === 'loading'}
+          disabled={state.status === 'loading' || refreshing}
           onClick={() => { load(true) }}
         >
-          {state.status === 'loading' ? t('refreshing') : t('refresh')}
+          {refreshing ? t('refreshing') : t('refresh')}
         </button>
         <button
           type="button"
@@ -236,6 +264,10 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, onI
               : t('summary', { shown: String(shown.length), total: String(catalog.items.length) })}
       </p>
 
+      {snapshot.profile === null && catalog !== null && (
+        <p className="dsh_market_status">{t('install.profilePending')}</p>
+      )}
+
       {shown.length > 0 && (
         <ul className="dsh_market_cards">
           {shown.map((item) => {
@@ -274,7 +306,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, onI
                       <button
                         type="button"
                         className="dsh_market_install"
-                        disabled={card?.status === 'busy'}
+                        disabled={card?.status === 'busy' || installBusy || snapshot.profile === null}
                         onClick={() => { runInstall(item) }}
                       >
                         {card?.status === 'busy' ? t('installing') : t('install')}
@@ -311,12 +343,23 @@ export function MarketSection({
   const [page, setPage] = useState<Page>('plugins')
   const [cards, setCards] = useState<Readonly<Record<string, CardState>>>({})
   const tabsId = useId()
+  // Mirror of the card states for same-tick guards (the rendered copy lags a
+  // frame behind), and a live flag so a hand-off that resolves after the
+  // section unmounted stops touching state.
+  const cardsRef = useRef<Readonly<Record<string, CardState>>>({})
+  const mounted = useRef(true)
+  useEffect(() => () => { mounted.current = false }, [])
+  // One install hand-off at a time: two cards clicked back to back must not
+  // open two sessions and stage two drafts.
+  const installBusy = Object.values(cards).some(card => card.status === 'busy')
 
   const report = (fullName: string, next: CardState): void => {
-    setCards(previous => ({ ...previous, [fullName]: next }))
+    cardsRef.current = { ...cardsRef.current, [fullName]: next }
+    if (mounted.current) setCards(cardsRef.current)
   }
 
   const runInstall = (target: MarketPlugin, prompt: string): void => {
+    if (Object.values(cardsRef.current).some(card => card.status === 'busy')) return
     report(target.fullName, { status: 'busy' })
     void install(target, prompt).then((outcome) => {
       if (outcome.ok) {
@@ -326,12 +369,12 @@ export function MarketSection({
         close()
         return
       }
-      report(target.fullName, {
-        status: 'error',
-        message: outcome.reason === 'no-workspace'
+      const message = outcome.reason === 'not-ready'
+        ? t('install.notReady')
+        : outcome.reason === 'no-workspace'
           ? t('install.noWorkspace')
-          : t('install.failed', { reason: outcome.message }),
-      })
+          : t('install.failed', { reason: outcome.message })
+      report(target.fullName, { status: 'error', message })
     }, (error: unknown) => {
       report(target.fullName, {
         status: 'error',
@@ -366,25 +409,36 @@ export function MarketSection({
           </button>
         ))}
       </div>
+      {/* The Plugins panel stays mounted across tab switches: unmounting it
+          would drop the search/filter state and re-pull the catalog on every
+          return. The Skills panel remounts per visit, so each visit re-reads
+          the live skill list. */}
       <div
-        id={`${tabsId}-panel-${page}`}
+        id={`${tabsId}-panel-plugins`}
         role="tabpanel"
-        aria-labelledby={`${tabsId}-tab-${page}`}
+        aria-labelledby={`${tabsId}-tab-plugins`}
+        hidden={page !== 'plugins'}
       >
-        {page === 'plugins'
-          ? (
-            <PluginsPage
-              t={t}
-              english={english}
-              snapshot={snapshot}
-              setEnabled={setEnabled}
-              loadCatalog={loadCatalog}
-              cards={cards}
-              onInstall={runInstall}
-            />
-            )
-          : <SkillsView t={t} listSkills={listSkills} />}
+        <PluginsPage
+          t={t}
+          english={english}
+          snapshot={snapshot}
+          setEnabled={setEnabled}
+          loadCatalog={loadCatalog}
+          cards={cards}
+          installBusy={installBusy}
+          onInstall={runInstall}
+        />
       </div>
+      {page === 'skills' && (
+        <div
+          id={`${tabsId}-panel-skills`}
+          role="tabpanel"
+          aria-labelledby={`${tabsId}-tab-skills`}
+        >
+          <SkillsView t={t} listSkills={listSkills} />
+        </div>
+      )}
     </div>
   )
 }

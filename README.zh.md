@@ -78,8 +78,9 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 ## 安全边界
 
 - **插件自身不执行任何安装命令**，也没有能执行它的接口——审查与安装因此不可分割；
-- **目录在 Host 侧读取并裁剪**后才发给浏览器（约 100 行，而不是 2.4 MB 快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求；
-- **仓库链接由 `owner/name` 重新拼装**，不采信快照里的地址，因此被投毒的快照无法塞进自己的 URL scheme；
+- **目录在 Host 侧读取并裁剪**后才发给浏览器（约 100 行，而不是 2.4 MB 快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（两次 304；连不上 GitHub 时用上次的目录）；
+- **仓库链接由 `owner/name` 重新拼装**，不采信快照里的地址，因此被投毒的快照无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
+- **默认分支名进提示词前经过模式校验**（`[A-Za-z0-9][A-Za-z0-9._/-]*` 加 git ref 规则，不合格一律回落 `main`），提示词同时声明 URL 与分支为市场提供的不透明字面量——被投毒的分支名无法向审查提示词注入指令；
 - 卡片全部以纯文本渲染；
 - 关闭状态下 Remote 接口直接拒绝，无法绕过开关读取目录；
 - 安装交接全程走官方公开服务（workspaces / sessions / conversation），不读 DOM、不发送消息。
@@ -97,7 +98,8 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 ```sh
 pnpm install --ignore-workspace
 pnpm run typecheck
-pnpm run build      # lib/index.js（Host，ESM）、lib/client.js（浏览器，ModuleLoader 包裹）、lib/types
+pnpm test          # node --test，目录归约与读取器的回归测试
+pnpm run build     # lib/index.js（Host，ESM）、lib/client.js（浏览器，ModuleLoader 包裹）、lib/types
 ```
 
 `devDependencies` 固定在与运行时一致的 `@deepseek-ai/*` 已发布版本上；`peerDependencies` 全部可选，实际由 profile 的 node_modules 提供。

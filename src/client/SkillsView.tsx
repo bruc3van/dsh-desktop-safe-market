@@ -13,7 +13,10 @@ import type { MarketSkill, MarketSkillsResult } from '../contract.ts'
 import type { MarketLocale } from './copy.ts'
 
 /** The reader's sentinel for "nothing to address" (see client/index.ts). */
-const NO_SESSION = 'no-session'
+export const NO_SESSION = 'no-session'
+
+/** The reader's sentinel for "the session list has not landed yet". */
+export const SESSIONS_PENDING = 'sessions-pending'
 
 /** Loading, failed, or answered. */
 type SkillsState =
@@ -76,13 +79,15 @@ export function SkillsView({ t, listSkills }: {
           ? t('skills.loading')
           : state.status === 'error'
             ? t('skills.failed', { reason: state.message })
-            : result !== null && result.error === NO_SESSION
-              ? t('skills.noSession')
-              : result !== null && result.error !== ''
-                ? t('skills.failed', { reason: result.error })
-                : shown.length === 0
-                  ? t('skills.empty')
-                  : t('skills.count', { count: String(shown.length) })}
+            : result !== null && result.error === SESSIONS_PENDING
+              ? t('skills.loading')
+              : result !== null && result.error === NO_SESSION
+                ? t('skills.noSession')
+                : result !== null && result.error !== ''
+                  ? t('skills.failed', { reason: result.error })
+                  : shown.length === 0
+                    ? t('skills.empty')
+                    : t('skills.count', { count: String(shown.length) })}
       </p>
 
       {result !== null && !result.complete && result.error === '' && (

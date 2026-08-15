@@ -32,11 +32,13 @@ import type {
 } from '../contract.ts'
 import { SAFE_MARKET_REMOTE } from './remote.ts'
 import { MarketSection, type InstallOutcome, type MarketSectionInjected } from './MarketSection.tsx'
+import { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 import { en, zh, type SafeMarketLocaleKey } from './locales.ts'
 import { adoptStyles } from './styles.ts'
 
 export type { MarketSectionInjected, MarketSectionProps, InstallOutcome } from './MarketSection.tsx'
 export type { SafeMarketLocaleKey } from './locales.ts'
+export { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 
 declare module '@deepseek-ai/dsh-client-ui-slots' {
   interface LocaleNamespaceMap {
@@ -66,9 +68,6 @@ interface SafeMarketFace {
 
 const defaultSettings = (): SafeMarketSettings => ({ enabled: false })
 
-/** Sentinel the skills page turns into its own localized copy. */
-export const NO_SESSION = 'no-session'
-
 function wait(ms: number): Promise<void> {
   return new Promise((resolve) => { setTimeout(resolve, ms) })
 }
@@ -81,7 +80,7 @@ export function apply(ctx: ClientContext): void {
   adoptStyles()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-desktop-safe-market: dictionaries')
 
-  const scope = createSnapshotStore({ value: defaultSettings(), profile: 'web' })
+  const scope = createSnapshotStore({ value: defaultSettings(), profile: null as string | null })
   let settingsGeneration = 0
 
   const reportError = (operation: string, error: unknown): void => {
@@ -145,9 +144,12 @@ export function apply(ctx: ClientContext): void {
     }
   }, 'dsh-desktop-safe-market: remote')
 
-  // Reconnect may have rebuilt the host: the durable switch is re-read rather
-  // than assumed to have survived.
-  ctx.on('connection/reset', () => { void loadSettings() })
+  // Reconnect may have rebuilt the host: the durable switch and the
+  // deployment facts are re-read rather than assumed to have survived.
+  ctx.on('connection/reset', () => {
+    void loadSettings()
+    void loadEnvironment()
+  })
 
   const setEnabled = async (enabled: boolean): Promise<void> => {
     const remote = market
@@ -181,9 +183,13 @@ export function apply(ctx: ClientContext): void {
     const remote = market
     if (remote === undefined) throw new Error('the safeMarket Remote is not mounted')
     const sessions = ctx.get('sessions') as unknown as ISessions
-    const current = sessions.list.getSnapshot().current
-    if (current === undefined) return { skills: [], complete: true, error: NO_SESSION }
-    const result = await remote.listSkills(current as unknown as string)
+    const snapshot = sessions.list.getSnapshot()
+    // "Pending" means the first list pull has not landed yet — telling the
+    // user "open a session first" while the list is still loading would be
+    // a wrong answer, not the honest one.
+    if (snapshot.phase !== 'ready') return { skills: [], complete: true, error: SESSIONS_PENDING }
+    if (snapshot.current === undefined) return { skills: [], complete: true, error: NO_SESSION }
+    const result = await remote.listSkills(snapshot.current as unknown as string)
     if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
     return result.value
   }
@@ -208,8 +214,11 @@ export function apply(ctx: ClientContext): void {
     const conversation = ctx.get('conversation') as IConversation
 
     // The same target rule the shell's own New Session action uses: the
-    // current session's workspace, then the recency projection.
+    // current session's workspace, then the recency projection. Both derive
+    // from the two-baseline readiness flag — in the first moments of boot
+    // `items` is still empty and "no workspace yet" would be a wrong answer.
     const workspaceState = workspaces.list.getSnapshot()
+    if (!workspaceState.baselinesReady) return { ok: false, reason: 'not-ready' }
     const current = sessions.list.getSnapshot().current
     const currentWorkspaceId = current === undefined
       ? undefined

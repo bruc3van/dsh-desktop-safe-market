@@ -13,6 +13,7 @@
  * rather than in the browser: the client receives 100 rows, not 2.4 MB.
  */
 import type { MarketCatalog, MarketCategory, MarketPlugin } from './contract.ts'
+import { isSafeBranchName, REPOSITORY_SLUG_PATTERN } from './contract.ts'
 
 /** A snapshot is refreshed daily upstream; asking more often than this is noise. */
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1_000
@@ -74,7 +75,10 @@ export interface CatalogOptions {
 function text(value: unknown, limit: number): string {
   if (typeof value !== 'string') return ''
   const trimmed = value.replace(/\s+/g, ' ').trim()
-  return trimmed.length > limit ? `${trimmed.slice(0, limit - 1)}…` : trimmed
+  // Cut by code point, not by UTF-16 unit, so a limit landing inside a
+  // surrogate pair cannot leave a lone half behind.
+  const points = [...trimmed]
+  return points.length > limit ? `${points.slice(0, limit - 1).join('')}…` : trimmed
 }
 
 function count(value: unknown): number {
@@ -84,7 +88,19 @@ function count(value: unknown): number {
 /** `owner/name` with nothing else in it — the only shape a link is built from. */
 function repositorySlug(value: unknown): string | null {
   if (typeof value !== 'string') return null
-  return /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(value) ? value : null
+  return REPOSITORY_SLUG_PATTERN.test(value) ? value : null
+}
+
+/**
+ * The branch the prompt's tarball fallback names. Remote text from a public
+ * snapshot: anything outside the safe pattern (which excludes whitespace and
+ * every prompt-injection character) falls back to `main` rather than being
+ * interpolated into the review prompt.
+ */
+function branchName(value: unknown): string {
+  if (typeof value !== 'string') return 'main'
+  const trimmed = text(value, 100)
+  return trimmed !== '' && isSafeBranchName(trimmed) ? trimmed : 'main'
 }
 
 /**
@@ -168,7 +184,7 @@ export function deriveCatalog(
       language: text(row.language, 40),
       license: text(row.license, 40),
       pushedAt: text(row.pushed_at, 30),
-      defaultBranch: text(row.default_branch, 100),
+      defaultBranch: branchName(row.default_branch),
       category,
       categoryZh: text(row.category_zh, 60) || category,
       categoryEn: text(row.category_en, 60) || category,
@@ -217,12 +233,25 @@ export interface CatalogSource {
  */
 export function createCatalogSource(options: CatalogOptions): CatalogSource {
   const base = options.base.replace(/\/+$/, '')
-  // Seeded from the durable seat, so the very first read after a restart is
-  // already conditional rather than a full download.
-  const seed = options.cache?.read() ?? { catalog: null, repositoriesEtag: '', curatedEtag: '' }
-  let catalog: MarketCatalog | null = seed.catalog
-  let repositoriesEtag = seed.repositoriesEtag
-  let curatedEtag = seed.curatedEtag
+  // The durable seat is NOT seeded at construction time. The plugin body
+  // hands the source a cache port whose backing domain opens asynchronously
+  // after this constructor returns, so reading it here would always see the
+  // initial (empty) state and a restart would pay a full download instead of
+  // two 304s. The seed is instead pulled lazily, on the first read — by then
+  // the domain is open, and the port answers from the state the effect
+  // adopted. Reading it again whenever the closure is still empty also
+  // covers the rare read that wins the race against the domain opening.
+  let catalog: MarketCatalog | null = null
+  let repositoriesEtag = ''
+  let curatedEtag = ''
+  const seedFromCache = (): void => {
+    if (catalog !== null) return
+    const cached = options.cache?.read()
+    if (cached === undefined || cached.catalog === null) return
+    catalog = cached.catalog
+    repositoriesEtag = cached.repositoriesEtag
+    curatedEtag = cached.curatedEtag
+  }
   let inFlight: Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }> | null = null
 
   const fresh = (): boolean => {
@@ -265,12 +294,22 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
 
   return {
     read: async (force, signal) => {
+      seedFromCache()
+      // A caller that arrives already aborted must not start the network
+      // read its answer would have needed.
+      if (signal?.aborted) throw signal.reason ?? new Error('This operation was aborted')
       if (!force && fresh() && catalog !== null) return { catalog, stale: false, error: '' }
       // One network read at a time: the tab can be reopened while the first
       // is still running, and two 2.4 MB downloads answer the same question.
-      inFlight ??= (async () => {
-        const timeout = AbortSignal.timeout(FETCH_TIMEOUT_MS)
-        const lifetime = signal === undefined ? timeout : AbortSignal.any([signal, timeout])
+      // The shared request is bound to the fetch timeout only — caller
+      // lifetimes never abort it, because the abort of one caller must not
+      // hand every other caller a dead answer. A caller that aborts stops
+      // waiting for its own copy of the result; the read itself finishes and
+      // serves whoever is still listening. `force` against an already
+      // running read merges into it (that read IS the fresh download force
+      // asked for), so no force gesture is dropped or duplicated.
+      const pending = (inFlight ??= (async () => {
+        const lifetime = AbortSignal.timeout(FETCH_TIMEOUT_MS)
         try {
           return await refresh(lifetime)
         } catch (error) {
@@ -282,8 +321,20 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
         } finally {
           inFlight = null
         }
-      })()
-      return await inFlight
+      })())
+      if (signal === undefined) return await pending
+      // This caller's abort resolves its wait as a cancellation; the shared
+      // read is untouched and stays in flight for the other callers.
+      let abort: (() => void) | undefined
+      const aborted = new Promise<never>((_, reject) => {
+        abort = (): void => { reject(signal.reason ?? new Error('This operation was aborted')) }
+        signal.addEventListener('abort', abort, { once: true })
+      })
+      try {
+        return await Promise.race([pending, aborted])
+      } finally {
+        if (abort !== undefined) signal.removeEventListener('abort', abort)
+      }
     },
   }
 }

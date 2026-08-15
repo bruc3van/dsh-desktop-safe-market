@@ -2,9 +2,12 @@
 # `dsh plugin --profile <name> add <url>` installs, and npm's `files` field
 # does not apply to it. Everything a consumer cannot execute is therefore
 # excluded from the archive here: sources, screenshots, and build config all
-# ship in the repository but never inside an installation.
+# ship in the repository but never inside an installation. Sourcemaps carry
+# the full source text, so they are excluded for the same reason.
 src/ export-ignore
 assets/ export-ignore
+test/ export-ignore
+*.map export-ignore
 build.mjs export-ignore
 tsconfig.json export-ignore
 pnpm-workspace.yaml export-ignore

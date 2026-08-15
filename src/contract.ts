@@ -13,6 +13,32 @@
 import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 
+/**
+ * The only `owner/name` shape the market keeps. The repository link is
+ * rebuilt on the Host from a slug matching this pattern, and the wire codec
+ * enforces the same shape, so the "host rebuilds the href" invariant is held
+ * by the contract rather than by a comment.
+ */
+export const REPOSITORY_SLUG_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
+
+/**
+ * The only branch-name shape the review prompt may interpolate. Branches are
+ * remote text from a public snapshot: anything outside this pattern (no
+ * whitespace, no punctuation beyond `._/-`) could inject instructions into
+ * the prompt or steer the tarball path, so the Host falls back to `main` for
+ * it. The trailing checks mirror the git ref rules GitHub enforces: no `..`
+ * anywhere, no segment may be `.` or end in `.`/`.lock`, and the name must
+ * not end in `/` or `.`.
+ */
+export const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
+
+/** Whether a trimmed branch name is safe to interpolate into the prompt. */
+export function isSafeBranchName(value: string): boolean {
+  if (!BRANCH_PATTERN.test(value)) return false
+  if (value.includes('..') || value.includes('//') || value.endsWith('/') || value.endsWith('.')) return false
+  return !value.split('/').some(segment => segment === '.' || segment.endsWith('.lock'))
+}
+
 /** One row of the market: a community plugin the catalog kept. */
 export interface MarketPlugin {
   /** `owner/name`, the catalog's identity for the entry. */
@@ -111,16 +137,18 @@ export type SafeMarketSettingsUpdate = { readonly field: 'enabled'; readonly val
 
 /** Strict wire codec for one market row. */
 export const marketPluginSchema = z.object({
-  fullName: z.string().min(1),
+  fullName: z.string().regex(REPOSITORY_SLUG_PATTERN),
   owner: z.string().min(1),
   name: z.string().min(1),
-  url: z.string().min(1),
+  // The Host rebuilds this from fullName; the codec makes the invariant
+  // machine-checked, so no renderer needs to trust a caller's href.
+  url: z.string().regex(/^https:\/\/github\.com\/[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/),
   description: z.string(),
   stars: z.number().int().min(0),
   language: z.string(),
   license: z.string(),
   pushedAt: z.string(),
-  defaultBranch: z.string(),
+  defaultBranch: z.string().refine(isSafeBranchName),
   category: z.string().min(1),
   categoryZh: z.string(),
   categoryEn: z.string(),

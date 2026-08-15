@@ -78,8 +78,9 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 ## Security boundary
 
 - **The plugin runs no install command and exposes no interface that could** — review and install are therefore inseparable;
-- **the catalog is fetched and reduced on the Host** before the browser sees it (about 100 rows, not a 2.4 MB snapshot), and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally;
-- **repository links are rebuilt from `owner/name`** rather than trusted from the snapshot, so a poisoned snapshot cannot contribute a URL scheme of its own;
+- **the catalog is fetched and reduced on the Host** before the browser sees it (about 100 rows, not a 2.4 MB snapshot), and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (two 304s, or the last catalog when GitHub is unreachable);
+- **repository links are rebuilt from `owner/name`** rather than trusted from the snapshot, so a poisoned snapshot cannot contribute a URL scheme of its own — the wire codec enforces the rebuilt shape, not just a comment;
+- **the default branch is pattern-checked before it reaches the prompt** (`[A-Za-z0-9][A-Za-z0-9._/-]*` plus the git ref rules; anything else falls back to `main`), and the prompt declares both the URL and the branch as opaque marketplace literals — a poisoned branch name cannot inject instructions into the review;
 - every card renders as plain text;
 - while disabled, the Remote refuses — the catalog cannot be read around the switch;
 - the install hand-off runs entirely through published services (workspaces / sessions / conversation): it reads no DOM and sends no message.
@@ -97,7 +98,8 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 ```sh
 pnpm install --ignore-workspace
 pnpm run typecheck
-pnpm run build      # lib/index.js (Host ESM), lib/client.js (browser, ModuleLoader-wrapped), lib/types
+pnpm test          # node --test, the catalog reduction and reader regressions
+pnpm run build     # lib/index.js (Host ESM), lib/client.js (browser, ModuleLoader-wrapped), lib/types
 ```
 
 `devDependencies` are pinned to the published `@deepseek-ai/*` versions the runtime actually loads; every `peerDependency` is optional and supplied by the profile's node_modules.

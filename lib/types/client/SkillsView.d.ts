@@ -11,6 +11,10 @@
 import { type ReactElement } from 'react';
 import type { MarketSkillsResult } from '../contract.ts';
 import type { MarketLocale } from './copy.ts';
+/** The reader's sentinel for "nothing to address" (see client/index.ts). */
+export declare const NO_SESSION = "no-session";
+/** The reader's sentinel for "the session list has not landed yet". */
+export declare const SESSIONS_PENDING = "sessions-pending";
 /** The Skills page. */
 export declare function SkillsView({ t, listSkills }: {
     t: MarketLocale;
