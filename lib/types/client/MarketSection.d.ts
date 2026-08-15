@@ -1,0 +1,62 @@
+/**
+ * The Marketplace settings section: its own entry in the Settings navigation,
+ * with two pages of its own.
+ *
+ * **Plugins** is the community shortlist. While the market is off it is one
+ * card that says what turning it on will do and asks; the switch is the
+ * plugin's own durable setting, so the answer survives a restart. While it is
+ * on, each card's action stages a security-review prompt in a new session —
+ * it installs nothing itself.
+ *
+ * **Skills** is what this deployment can already resolve. It needs neither the
+ * switch nor the network.
+ *
+ * A section (rather than a tab inside the official Plugins page) is what makes
+ * the hand-off complete: the settings shell hands every section a `close`,
+ * so staging the prompt can end with the user looking at the session it was
+ * staged in.
+ */
+import { type ReactElement } from 'react';
+import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client';
+import type { MarketCatalog, MarketPlugin, MarketSkillsResult, SafeMarketSettings } from '../contract.ts';
+/** The live snapshot the section renders from: the switch plus the deployment facts. */
+export interface SafeMarketSnapshot {
+    readonly value: SafeMarketSettings;
+    /** The profile an install would change; names `--profile` in the prompt. */
+    readonly profile: string;
+}
+export type SafeMarketSource = ObservableSnapshot<SafeMarketSnapshot>;
+/** What the install hand-off reports back to the card that asked for it. */
+export type InstallOutcome = {
+    readonly ok: true;
+} | {
+    readonly ok: false;
+    readonly reason: 'no-workspace';
+} | {
+    readonly ok: false;
+    readonly reason: 'failed';
+    readonly message: string;
+};
+/** Injected business face: the live source and the section's verbs. */
+export interface MarketSectionInjected {
+    hooks: {
+        scope: SafeMarketSource;
+    };
+    /** Turn the market on or off (durable). */
+    setEnabled: (enabled: boolean) => Promise<void>;
+    /** Read the reduced catalog; `force` bypasses the refresh interval. */
+    loadCatalog: (force: boolean) => Promise<{
+        catalog: MarketCatalog | null;
+        stale: boolean;
+        error: string;
+    }>;
+    /** Read the skills this deployment resolves. */
+    listSkills: () => Promise<MarketSkillsResult>;
+    /** Open a session in the current or most recent workspace and stage the given prompt. */
+    install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>;
+}
+/** Full section props: runtime share + injected face + locale seat. */
+export type MarketSectionProps = PropsRuntime<'settings.section'> & InjectFace<MarketSectionInjected> & PropsLocale<'settings.safeMarket'>;
+/** The Marketplace section. */
+export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, install, close, t, }: MarketSectionProps): ReactElement;
