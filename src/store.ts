@@ -12,6 +12,13 @@ import { z } from 'zod'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
 import { marketCatalogSchema } from './contract.ts'
 
+/** One uninstall whose stop rows are still in the user's patch file. */
+export const pendingUninstallState = z.object({
+  packageName: z.string(),
+  entryIds: z.array(z.string()),
+  at: z.string(),
+})
+
 /** The durable state: one catalog, plus what it was fetched with. */
 export const safeMarketDomainState = z.object({
   /** The last reduction, or null before the first successful read. */
@@ -27,6 +34,12 @@ export const safeMarketDomainState = z.object({
   marketSize: z.number().int().min(1),
   /** The catalog base the reduction came from, for the same reason. */
   catalogBase: z.string(),
+  /**
+   * Uninstalls whose `disabled: true` rows the next boot's sweep takes back
+   * out of the user's patch file. Defaulted so a store written before this
+   * field existed still parses (and keeps the catalog cache) at version 1.
+   */
+  pendingUninstall: z.array(pendingUninstallState).default([]),
 })
 
 /** Durable market state inferred from {@link safeMarketDomainState}. */
@@ -44,10 +57,11 @@ export const initialDomainState: SafeMarketDomainState = {
   curatedEtag: '',
   marketSize: 1,
   catalogBase: '',
+  pendingUninstall: [],
 }
 
 /**
- * The `safe-market` domain spec: one global singleton, no tables. The plugin
+ * The `safe_market` domain spec: one global singleton, no tables. The plugin
  * opens this through `ctx.storageDomain`; the spec object is the single
  * source of the domain's identity, version, and schema.
  */
@@ -60,3 +74,36 @@ export const safeMarketDomainSpec = defineDomain({
   global: { schema: safeMarketDomainState, initial: initialDomainState },
   tables: {},
 })
+
+/**
+ * Adopt the durable state when the domain opens, as one pure step so the
+ * merge has regression tests: the pending-uninstall record always follows the
+ * disk, and a memory catalog that landed while the domain was opening keeps
+ * precedence over the disk (it is newer). Otherwise the stored catalog is
+ * adopted WHOLE — the cut and the base it was cut under included, because the
+ * cache gate re-checks `marketSize`/`catalogBase` against the live config on
+ * every read: adopting the rows without the numbers they were reduced under
+ * would leave the cache permanently unusable (a full re-download every boot,
+ * and an empty market when GitHub is unreachable).
+ * @param current - the in-memory state built before the domain opened.
+ * @param stored - the domain's durable state as read from disk.
+ * @param isUsable - whether a candidate state answers the current config.
+ * @returns the merged state the plugin runs with.
+ */
+export function adoptDomainState(
+  current: SafeMarketDomainState,
+  stored: SafeMarketDomainState,
+  isUsable: (candidate: SafeMarketDomainState) => boolean,
+): SafeMarketDomainState {
+  const next: SafeMarketDomainState = { ...current, pendingUninstall: stored.pendingUninstall ?? current.pendingUninstall }
+  if (current.catalog !== null) return next
+  if (!isUsable(stored)) return next
+  return {
+    ...next,
+    catalog: stored.catalog,
+    repositoriesEtag: stored.repositoriesEtag,
+    curatedEtag: stored.curatedEtag,
+    marketSize: stored.marketSize,
+    catalogBase: stored.catalogBase,
+  }
+}

@@ -12,23 +12,26 @@
 import type { Context } from '@deepseek-ai/cordis';
 import { TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol';
 import type { CatalogSource } from './catalog.ts';
+import type { InstalledManager } from './installed.ts';
 import type { SkillReadAgent } from './skills.ts';
-import type { MarketCatalogResult, MarketEnvironment, MarketSkillsResult, SafeMarketSettings, SafeMarketSettingsUpdate } from './contract.ts';
-/** Market service: the reduced catalog and the plugin's durable settings. */
+import type { MarketCatalogResult, MarketEnvironment, MarketInstalledResult, MarketSkillsResult, SafeMarketSettings, SafeMarketSettingsUpdate, SetInstalledEnabledUpdate, UninstallInstalledUpdate } from './contract.ts';
+/** Market service: the reduced catalog, the plugin's durable settings, and the installed-panel verbs. */
 export declare class SafeMarketRuntime extends TypertRemoteService {
     private readonly catalog;
     private readonly readSettings;
     private readonly writeSettings;
     private readonly readSkills;
     private readonly environment;
+    private readonly installed;
     /**
      * Register the service under the `safeMarket` key (the wire namespace).
      * @param ctx - owning cordis context.
      * @param catalog - the catalog reader.
      * @param readSettings - live settings read.
      * @param writeSettings - durable settings write.
+     * @param installed - the installed-plugin manager.
      */
-    constructor(ctx: Context, catalog: CatalogSource, readSettings: () => SafeMarketSettings, writeSettings: (update: SafeMarketSettingsUpdate) => Promise<SafeMarketSettings>, readSkills: (agent: SkillReadAgent, signal: AbortSignal) => Promise<MarketSkillsResult>, environment: MarketEnvironment);
+    constructor(ctx: Context, catalog: CatalogSource, readSettings: () => SafeMarketSettings, writeSettings: (update: SafeMarketSettingsUpdate) => Promise<SafeMarketSettings>, readSkills: (agent: SkillReadAgent, signal: AbortSignal) => Promise<MarketSkillsResult>, environment: MarketEnvironment, installed: InstalledManager);
     /**
      * The deployment facts the browser needs to NAME the install command —
      * which profile an install would change. This plugin never runs it.
@@ -61,4 +64,23 @@ export declare class SafeMarketRuntime extends TypertRemoteService {
      * @returns the catalog, or the reason it could not be read.
      */
     getCatalog(force: boolean, signal: AbortSignal): Promise<MarketCatalogResult>;
+    /**
+     * The plugins installed into this profile, with live enable state.
+     *
+     * Like the skills read, deliberately not gated on the market switch: the
+     * answer comes from this machine's own profile files and Loader tree, so it
+     * reaches nothing outside and answers whether or not the catalog is on.
+     */
+    listInstalled(): Promise<MarketInstalledResult>;
+    /**
+     * Enable or disable one installed package: durable rows in the profile's own
+     * patch layer, then a live nudge so the change applies without a restart.
+     */
+    setInstalledEnabled(update: SetInstalledEnabledUpdate): Promise<MarketInstalledResult>;
+    /**
+     * Uninstall one installed package: out of the profile manifest (the next
+     * boot never composes it), stopped for the rest of this session. The next
+     * boot's sweep takes the stop rows back out of the user's patch file.
+     */
+    uninstallInstalled(update: UninstallInstalledUpdate): Promise<MarketInstalledResult>;
 }

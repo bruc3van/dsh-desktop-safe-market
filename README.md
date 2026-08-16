@@ -2,9 +2,9 @@
 
 English | [中文](./README.zh.md)
 
-A **review-before-install** extension marketplace for the DeepSeek Harness web GUI. It adds a **Marketplace** entry to the Settings navigation, with two pages:
+A **review-before-install** extension marketplace for the DeepSeek Harness web GUI. It adds a **Marketplace** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
 
-- **Plugins** — 100 community plugins balanced across categories. **Review and install** installs nothing: it opens a new session, stages a **security-review prompt** in the composer, and closes Settings, so an agent reads the code and only then runs the official install command.
+- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile with their live state, each disableable/enableable and uninstallable (what shipped with DSH is not listed); below it, 100 community plugins balanced across categories. **Review and install** installs nothing: it opens a new session, stages a **security-review prompt** in the composer, and closes Settings, so an agent reads the code and only then runs the official install command.
 - **Skills** — what the current session can actually resolve.
 
 ![The marketplace tab](./assets/screenshots/market.png)
@@ -18,7 +18,7 @@ This plugin joins the two halves: a community shortlist that has **already had t
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.1.2.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.0.tar.gz
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -27,7 +27,7 @@ The browser, the CLI, and the desktop client share one profile, so the entry app
 
 ## You turn it on yourself
 
-The **Plugins** page ships **off**. Until you enable it, it is one card explaining what enabling does, and a button.
+The **market half** of the Plugins page ships **off**. Until you enable it, it is one card explaining what enabling does, and a button (the installed panel answers either way).
 
 That is deliberate: **enabling is what lets this machine read the catalog snapshot from GitHub**, and while it is off the plugin makes no network request at all. A plugin that arrives already reaching out has decided something on your behalf. The switch is the plugin's own durable setting — answer once and it stays answered.
 
@@ -46,6 +46,15 @@ dsh plugin --profile web add <the repository's tarball URL>
 preferring the latest release tag and falling back to the default branch (the catalog supplies the branch name). The prompt also says that dsh must be restarted before the plugin loads.
 
 Whether it is sent is your Enter key. With no workspace at all, the card says so and points you at the sidebar.
+
+## The installed panel
+
+The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` — version, description, the live state of each loader entry — with two actions:
+
+- **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
+- **Uninstall** removes the dependency and the `dsh.profile.bundles` layer from the profile's `package.json` (the next boot simply never composes it) and stops the plugin for the rest of the session; on the next boot the plugin takes those stop rows back out of your patch file. Files left in `node_modules` become inert and are pruned by the next `dsh plugin` command.
+
+By design it matches "review and install": **local file edits plus loader calls — no process spawned, no network**, and the panel reads only this machine's own facts, so it works with the market off.
 
 ## The Skills page
 
@@ -83,15 +92,17 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 - **the default branch is pattern-checked before it reaches the prompt** (`[A-Za-z0-9][A-Za-z0-9._/-]*` plus the git ref rules; anything else falls back to `main`), and the prompt declares both the URL and the branch as opaque marketplace literals — a poisoned branch name cannot inject instructions into the review;
 - every card renders as plain text;
 - while disabled, the Remote refuses — the catalog cannot be read around the switch;
-- the install hand-off runs entirely through published services (workspaces / sessions / conversation): it reads no DOM and sends no message.
+- the install hand-off runs entirely through published services (workspaces / sessions / conversation): it reads no DOM and sends no message;
+- the installed-panel verbs accept only **wire-codec-checked package names that are actually in the profile manifest**, and land as local file edits plus loader calls with no process spawned; edits to your patch layer preserve existing comments and hand-written rows.
 
 **Being listed is not a safety endorsement.** The agent's review is an informed second opinion, not a verdict — read it yourself before deciding.
 
 ## Known limitations
 
 - **Skills are read-only for now.** The Skills page answers "what do I have". Skills are distributed as filesystem directories rather than npm packages, so installing them is the next step.
-- **It does not audit what you already installed.** This covers the moment before an install, not the plugins already running.
+- **It does not audit what you already installed.** The installed panel views, disables, and uninstalls, but it does not re-review code that is already running — the before-install review is still the gate.
 - **The market does not run the install itself.** The command lives in the prompt and the agent runs it, which is what makes the review impossible to skip — at the cost of no progress display inside the market.
+- **The nav icon is a skin-level swap.** The settings shell hardcodes section nav icons by id (unknown ids get the gear) and the slot contract has no icon seat; this plugin finds its own labeled row and re-skins the icon. If the shell restructures, the worst case is the gear returning — nothing functional breaks.
 
 ## Development
 

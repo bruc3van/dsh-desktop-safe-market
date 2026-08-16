@@ -135,6 +135,60 @@ export interface SafeMarketSettings {
 /** One field update sent through the plugin-owned settings Remote. */
 export type SafeMarketSettingsUpdate = { readonly field: 'enabled'; readonly value: boolean }
 
+/**
+ * The only npm package-name shape the installed-panel verbs accept. The
+ * membership check against the profile's bundle list is the real gate; this
+ * codec just keeps wire text in the shape of a name at all.
+ */
+export const PACKAGE_NAME_PATTERN = /^(?:@[A-Za-z0-9._-]+\/)?[A-Za-z0-9._-]+$/
+
+/** Live state of one loader entry an installed bundle introduces. */
+export interface MarketInstalledEntry {
+  /** The patch-addressable entry id (no `include:` prefix). */
+  readonly id: string
+  /** The module specifier the entry imports. */
+  readonly name: string
+  /** Whether the entry exists in the live Loader tree. */
+  readonly present: boolean
+  /** Effective enablement (a disabled ancestor group included). */
+  readonly enabled: boolean
+  /** The entry's fiber phase, or null while no fiber exists. */
+  readonly phase: 'pending' | 'loading' | 'active' | 'failed' | 'disposed' | 'unloading' | null
+}
+
+/** One user-installed plugin package, with the live state of its entries. */
+export interface MarketInstalledPackage {
+  readonly packageName: string
+  readonly version: string
+  readonly description: string
+  /** The market's own row: listed, but the panel must not disable it. */
+  readonly self: boolean
+  /** Package-level enablement: at least one of its entries is enabled. */
+  readonly enabled: boolean
+  readonly entries: readonly MarketInstalledEntry[]
+  /** Why the bundle could not be read (uninstall stays available); '' when read. */
+  readonly error: string
+}
+
+/** The installed-panel read: the packages, or the reason the profile read failed. */
+export interface MarketInstalledResult {
+  readonly packages: readonly MarketInstalledPackage[]
+  /** The profile the list describes (the panel names it in its explainer). */
+  readonly profile: string
+  readonly error: string
+}
+
+/** One enable/disable request for an installed package. */
+export interface SetInstalledEnabledUpdate {
+  readonly packageName: string
+  readonly enabled: boolean
+}
+
+/** One uninstall request for an installed package. */
+export interface UninstallInstalledUpdate {
+  readonly packageName: string
+}
+
 /** Strict wire codec for one market row. */
 export const marketPluginSchema = z.object({
   fullName: z.string().regex(REPOSITORY_SLUG_PATTERN),
@@ -209,6 +263,50 @@ export const safeMarketSettingsSchema = z.object({
 export const safeMarketSettingsUpdateSchema = z.discriminatedUnion('field', [
   z.object({ field: z.literal('enabled'), value: z.boolean() }).readonly(),
 ])
+
+/** Strict wire codec for an npm package name. */
+export const packageNameSchema = z.string().regex(PACKAGE_NAME_PATTERN)
+
+/** Strict wire codec for one installed entry's live state. */
+export const marketInstalledEntrySchema = z.object({
+  id: z.string().min(1),
+  name: z.string(),
+  present: z.boolean(),
+  enabled: z.boolean(),
+  phase: z.union([
+    z.enum(['pending', 'loading', 'active', 'failed', 'disposed', 'unloading']),
+    z.null(),
+  ]),
+}).readonly()
+
+/** Strict wire codec for one installed package. */
+export const marketInstalledPackageSchema = z.object({
+  packageName: packageNameSchema,
+  version: z.string(),
+  description: z.string(),
+  self: z.boolean(),
+  enabled: z.boolean(),
+  entries: z.array(marketInstalledEntrySchema).readonly(),
+  error: z.string(),
+}).readonly()
+
+/** Strict wire codec for the installed-panel read. */
+export const marketInstalledResultSchema = z.object({
+  packages: z.array(marketInstalledPackageSchema).readonly(),
+  profile: z.string(),
+  error: z.string(),
+}).readonly()
+
+/** Strict wire codec for one enable/disable request. */
+export const setInstalledEnabledUpdateSchema = z.object({
+  packageName: packageNameSchema,
+  enabled: z.boolean(),
+}).readonly()
+
+/** Strict wire codec for one uninstall request. */
+export const uninstallInstalledUpdateSchema = z.object({
+  packageName: packageNameSchema,
+}).readonly()
 
 /** The safeMarket Remote namespace's strict invocation descriptors. */
 export const SAFE_MARKET_INVOCATIONS: readonly InvocationDescriptor[] = [
@@ -309,6 +407,67 @@ export const SAFE_MARKET_INVOCATIONS: readonly InvocationDescriptor[] = [
       mode: 'strict',
       typeSymbol: 'dsh-desktop-safe-market#SafeMarketSettings',
       schema: safeMarketSettingsSchema,
+    },
+  },
+  {
+    id: 'dsh-desktop-safe-market#safeMarket/listInstalled',
+    service: 'safeMarket',
+    namespace: 'safeMarket',
+    method: 'listInstalled',
+    invocation: { kind: 'direct' },
+    parameters: [],
+    result: {
+      mode: 'strict',
+      typeSymbol: 'dsh-desktop-safe-market#MarketInstalledResult',
+      schema: marketInstalledResultSchema,
+    },
+  },
+  {
+    id: 'dsh-desktop-safe-market#safeMarket/setInstalledEnabled',
+    service: 'safeMarket',
+    namespace: 'safeMarket',
+    method: 'setInstalledEnabled',
+    invocation: { kind: 'direct' },
+    parameters: [
+      {
+        name: 'update',
+        wire: 'update',
+        source: 'json',
+        codec: {
+          mode: 'strict',
+          typeSymbol: 'dsh-desktop-safe-market#SetInstalledEnabledUpdate',
+          schema: setInstalledEnabledUpdateSchema,
+        },
+      },
+    ],
+    result: {
+      mode: 'strict',
+      typeSymbol: 'dsh-desktop-safe-market#MarketInstalledResult',
+      schema: marketInstalledResultSchema,
+    },
+  },
+  {
+    id: 'dsh-desktop-safe-market#safeMarket/uninstallInstalled',
+    service: 'safeMarket',
+    namespace: 'safeMarket',
+    method: 'uninstallInstalled',
+    invocation: { kind: 'direct' },
+    parameters: [
+      {
+        name: 'update',
+        wire: 'update',
+        source: 'json',
+        codec: {
+          mode: 'strict',
+          typeSymbol: 'dsh-desktop-safe-market#UninstallInstalledUpdate',
+          schema: uninstallInstalledUpdateSchema,
+        },
+      },
+    ],
+    result: {
+      mode: 'strict',
+      typeSymbol: 'dsh-desktop-safe-market#MarketInstalledResult',
+      schema: marketInstalledResultSchema,
     },
   },
 ]

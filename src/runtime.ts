@@ -12,16 +12,20 @@
 import type { Context } from '@deepseek-ai/cordis'
 import { Remote, TypertRemoteService } from '@deepseek-ai/dsh-typert-protocol'
 import type { CatalogSource } from './catalog.ts'
+import type { InstalledManager } from './installed.ts'
 import type { SkillReadAgent } from './skills.ts'
 import type {
   MarketCatalogResult,
   MarketEnvironment,
+  MarketInstalledResult,
   MarketSkillsResult,
   SafeMarketSettings,
   SafeMarketSettingsUpdate,
+  SetInstalledEnabledUpdate,
+  UninstallInstalledUpdate,
 } from './contract.ts'
 
-/** Market service: the reduced catalog and the plugin's durable settings. */
+/** Market service: the reduced catalog, the plugin's durable settings, and the installed-panel verbs. */
 export class SafeMarketRuntime extends TypertRemoteService {
   /**
    * Register the service under the `safeMarket` key (the wire namespace).
@@ -29,6 +33,7 @@ export class SafeMarketRuntime extends TypertRemoteService {
    * @param catalog - the catalog reader.
    * @param readSettings - live settings read.
    * @param writeSettings - durable settings write.
+   * @param installed - the installed-plugin manager.
    */
   constructor(
     ctx: Context,
@@ -37,6 +42,7 @@ export class SafeMarketRuntime extends TypertRemoteService {
     private readonly writeSettings: (update: SafeMarketSettingsUpdate) => Promise<SafeMarketSettings>,
     private readonly readSkills: (agent: SkillReadAgent, signal: AbortSignal) => Promise<MarketSkillsResult>,
     private readonly environment: MarketEnvironment,
+    private readonly installed: InstalledManager,
   ) {
     super(ctx, 'safeMarket')
   }
@@ -94,5 +100,36 @@ export class SafeMarketRuntime extends TypertRemoteService {
       throw new Error('the plugin market is disabled in Settings')
     }
     return await this.catalog.read(force, signal)
+  }
+
+  /**
+   * The plugins installed into this profile, with live enable state.
+   *
+   * Like the skills read, deliberately not gated on the market switch: the
+   * answer comes from this machine's own profile files and Loader tree, so it
+   * reaches nothing outside and answers whether or not the catalog is on.
+   */
+  @Remote
+  async listInstalled(): Promise<MarketInstalledResult> {
+    return await this.installed.list()
+  }
+
+  /**
+   * Enable or disable one installed package: durable rows in the profile's own
+   * patch layer, then a live nudge so the change applies without a restart.
+   */
+  @Remote
+  async setInstalledEnabled(update: SetInstalledEnabledUpdate): Promise<MarketInstalledResult> {
+    return await this.installed.setEnabled(update.packageName, update.enabled)
+  }
+
+  /**
+   * Uninstall one installed package: out of the profile manifest (the next
+   * boot never composes it), stopped for the rest of this session. The next
+   * boot's sweep takes the stop rows back out of the user's patch file.
+   */
+  @Remote
+  async uninstallInstalled(update: UninstallInstalledUpdate): Promise<MarketInstalledResult> {
+    return await this.installed.uninstall(update.packageName)
   }
 }

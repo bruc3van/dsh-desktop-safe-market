@@ -9,6 +9,12 @@
  * still opens the market with the last catalog it saw.
  */
 import { z } from 'zod';
+/** One uninstall whose stop rows are still in the user's patch file. */
+export declare const pendingUninstallState: z.ZodObject<{
+    packageName: z.ZodString;
+    entryIds: z.ZodArray<z.ZodString>;
+    at: z.ZodString;
+}, z.core.$strip>;
 /** The durable state: one catalog, plus what it was fetched with. */
 export declare const safeMarketDomainState: z.ZodObject<{
     catalog: z.ZodUnion<readonly [z.ZodReadonly<z.ZodObject<{
@@ -41,6 +47,11 @@ export declare const safeMarketDomainState: z.ZodObject<{
     curatedEtag: z.ZodString;
     marketSize: z.ZodNumber;
     catalogBase: z.ZodString;
+    pendingUninstall: z.ZodDefault<z.ZodArray<z.ZodObject<{
+        packageName: z.ZodString;
+        entryIds: z.ZodArray<z.ZodString>;
+        at: z.ZodString;
+    }, z.core.$strip>>>;
 }, z.core.$strip>;
 /** Durable market state inferred from {@link safeMarketDomainState}. */
 export type SafeMarketDomainState = z.infer<typeof safeMarketDomainState>;
@@ -52,7 +63,7 @@ export type SafeMarketDomainState = z.infer<typeof safeMarketDomainState>;
  */
 export declare const initialDomainState: SafeMarketDomainState;
 /**
- * The `safe-market` domain spec: one global singleton, no tables. The plugin
+ * The `safe_market` domain spec: one global singleton, no tables. The plugin
  * opens this through `ctx.storageDomain`; the spec object is the single
  * source of the domain's identity, version, and schema.
  */
@@ -91,6 +102,11 @@ export declare const safeMarketDomainSpec: {
             curatedEtag: z.ZodString;
             marketSize: z.ZodNumber;
             catalogBase: z.ZodString;
+            pendingUninstall: z.ZodDefault<z.ZodArray<z.ZodObject<{
+                packageName: z.ZodString;
+                entryIds: z.ZodArray<z.ZodString>;
+                at: z.ZodString;
+            }, z.core.$strip>>>;
         }, z.core.$strip>;
         initial: {
             catalog: Readonly<{
@@ -123,7 +139,28 @@ export declare const safeMarketDomainSpec: {
             curatedEtag: string;
             marketSize: number;
             catalogBase: string;
+            pendingUninstall: {
+                packageName: string;
+                entryIds: string[];
+                at: string;
+            }[];
         };
     };
     tables: {};
 };
+/**
+ * Adopt the durable state when the domain opens, as one pure step so the
+ * merge has regression tests: the pending-uninstall record always follows the
+ * disk, and a memory catalog that landed while the domain was opening keeps
+ * precedence over the disk (it is newer). Otherwise the stored catalog is
+ * adopted WHOLE — the cut and the base it was cut under included, because the
+ * cache gate re-checks `marketSize`/`catalogBase` against the live config on
+ * every read: adopting the rows without the numbers they were reduced under
+ * would leave the cache permanently unusable (a full re-download every boot,
+ * and an empty market when GitHub is unreachable).
+ * @param current - the in-memory state built before the domain opened.
+ * @param stored - the domain's durable state as read from disk.
+ * @param isUsable - whether a candidate state answers the current config.
+ * @returns the merged state the plugin runs with.
+ */
+export declare function adoptDomainState(current: SafeMarketDomainState, stored: SafeMarketDomainState, isUsable: (candidate: SafeMarketDomainState) => boolean): SafeMarketDomainState;

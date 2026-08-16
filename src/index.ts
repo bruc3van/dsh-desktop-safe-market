@@ -17,11 +17,14 @@ import type {} from '@deepseek-ai/dsh-typert-registry'
 import type {} from '@deepseek-ai/dsh-settings'
 // Type-only: brings the `ctx.storageDomain` Context merge in.
 import type {} from '@deepseek-ai/dsh-storage-domain'
+// Type-only: brings the `ctx.loader` Context merge in.
+import type {} from '@deepseek-ai/cordis-plugin-loader'
 import { createCatalogSource, type CatalogCache } from './catalog.ts'
+import { createInstalledManager } from './installed.ts'
 import { SafeMarketRuntime } from './runtime.ts'
 import { registerSafeMarketSettings } from './settings.ts'
 import { readSkills } from './skills.ts'
-import { initialDomainState, safeMarketDomainSpec, type SafeMarketDomainState } from './store.ts'
+import { adoptDomainState, initialDomainState, safeMarketDomainSpec, type SafeMarketDomainState } from './store.ts'
 import { TYPERT_MANIFEST } from './typert.ts'
 import type { SafeMarketSettingsUpdate } from './contract.ts'
 
@@ -31,9 +34,10 @@ export const name = 'dsh-desktop-safe-market'
 /**
  * Services required before load. `skills` and `storageDomain` join the
  * settings and Typert seats: the market lists what this deployment can
- * resolve, and keeps its reduction across restarts.
+ * resolve, and keeps its reduction across restarts. `loader` is the installed
+ * panel's live view of the entry tree its enable/disable verbs nudge.
  */
-export const inject = ['typert', 'settings', 'skills', 'storageDomain']
+export const inject = ['typert', 'settings', 'skills', 'storageDomain', 'loader']
 
 export type {
   MarketCatalog,
@@ -111,6 +115,7 @@ export function apply(ctx: Context, config?: Config): void {
     ),
     write: (next) => {
       state = {
+        ...state,
         catalog: next.catalog,
         repositoriesEtag: next.repositoriesEtag,
         curatedEtag: next.curatedEtag,
@@ -120,6 +125,20 @@ export function apply(ctx: Context, config?: Config): void {
       persist?.(state)
     },
   }
+
+  // The installed panel's manager: profile files for the durable half, the
+  // live Loader for the now half. Its pending-uninstall record rides the same
+  // domain state as the catalog cache.
+  const installed = createInstalledManager({
+    profile: resolved.profile,
+    selfName: name,
+    loader: ctx.loader,
+    readPending: () => state.pendingUninstall,
+    writePending: (next) => {
+      state = { ...state, pendingUninstall: next.map(record => ({ ...record, entryIds: [...record.entryIds] })) }
+      persist?.(state)
+    },
+  })
 
   ctx.effect(async () => {
     try {
@@ -132,16 +151,18 @@ export function apply(ctx: Context, config?: Config): void {
         })
       }
       const stored = domain.global.get()
-      if (state.catalog === null) {
-        // Nothing landed while the domain was opening: adopt the disk when it
-        // answers the current config's question.
-        if (usable(stored)) state = stored
-      } else {
+      const hadMemoryCatalog = state.catalog !== null
+      state = adoptDomainState(state, stored, usable)
+      if (hadMemoryCatalog) {
         // A read landed while the domain was opening. It is newer than
         // anything on disk but its write happened before `persist` existed —
         // flush it now instead of losing it until the next refresh.
         persist(state)
       }
+      // Take back last session's uninstall stop rows before serving: the
+      // composition no longer carries their targets (or a reinstall wants
+      // them gone), and the user's patch file should not keep our litter.
+      await installed.sweep()
       return () => {
         persist = undefined
         void domain.close()
@@ -163,6 +184,7 @@ export function apply(ctx: Context, config?: Config): void {
     writeSettings,
     (agent, signal) => readSkills(ctx, agent, signal),
     { profile: resolved.profile },
+    installed,
   )
 
   // Strict endpoint registration: the gateway resolves the market's calls

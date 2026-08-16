@@ -19,7 +19,7 @@
 import { type ReactElement } from 'react';
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client';
-import type { MarketCatalog, MarketPlugin, MarketSkillsResult, SafeMarketSettings } from '../contract.ts';
+import type { MarketCatalog, MarketInstalledResult, MarketPlugin, MarketSkillsResult, SafeMarketSettings } from '../contract.ts';
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
 export interface SafeMarketSnapshot {
     readonly value: SafeMarketSettings;
@@ -63,8 +63,14 @@ export interface MarketSectionInjected {
     listSkills: () => Promise<MarketSkillsResult>;
     /** Open a session in the current or most recent workspace and stage the given prompt. */
     install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>;
+    /** Read the plugins installed into this profile, with live enable state. */
+    listInstalled: () => Promise<MarketInstalledResult>;
+    /** Enable or disable one installed package (durable and immediate). */
+    setInstalledEnabled: (packageName: string, enabled: boolean) => Promise<MarketInstalledResult>;
+    /** Uninstall one installed package (stops now, finishes on restart). */
+    uninstallInstalled: (packageName: string) => Promise<MarketInstalledResult>;
 }
 /** Full section props: runtime share + injected face + locale seat. */
 export type MarketSectionProps = PropsRuntime<'settings.section'> & InjectFace<MarketSectionInjected> & PropsLocale<'settings.safeMarket'>;
 /** The Marketplace section. */
-export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, install, close, t, }: MarketSectionProps): ReactElement;
+export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, install, listInstalled, setInstalledEnabled, uninstallInstalled, close, t, }: MarketSectionProps): ReactElement;

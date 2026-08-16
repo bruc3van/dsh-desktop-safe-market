@@ -21,6 +21,8 @@ import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-cli
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
   MarketCatalog,
+  MarketInstalledPackage,
+  MarketInstalledResult,
   MarketPlugin,
   MarketSkillsResult,
   SafeMarketSettings,
@@ -59,6 +61,12 @@ export interface MarketSectionInjected {
   listSkills: () => Promise<MarketSkillsResult>
   /** Open a session in the current or most recent workspace and stage the given prompt. */
   install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>
+  /** Read the plugins installed into this profile, with live enable state. */
+  listInstalled: () => Promise<MarketInstalledResult>
+  /** Enable or disable one installed package (durable and immediate). */
+  setInstalledEnabled: (packageName: string, enabled: boolean) => Promise<MarketInstalledResult>
+  /** Uninstall one installed package (stops now, finishes on restart). */
+  uninstallInstalled: (packageName: string) => Promise<MarketInstalledResult>
 }
 
 /** Full section props: runtime share + injected face + locale seat. */
@@ -95,13 +103,226 @@ function matches(item: MarketPlugin, query: string, category: string, english: b
   return query.split(/\s+/).every(word => haystack.includes(word))
 }
 
+/** `@scope/name` → `name`; a bare name stays itself. */
+function shortName(packageName: string): string {
+  return packageName.startsWith('@') ? packageName.slice(packageName.indexOf('/') + 1) : packageName
+}
+
+/** The status a package row shows, from its own live facts. */
+function stateOf(item: MarketInstalledPackage): 'readFailed' | 'disabled' | 'failed' | 'running' | 'installed' {
+  if (item.error !== '') return 'readFailed'
+  // A bundle whose patch declares no entry rows is neither running nor
+  // stopped — installed, with nothing live to report.
+  if (item.entries.length === 0) return 'installed'
+  if (!item.enabled) return 'disabled'
+  return item.entries.some(entry => entry.phase === 'failed') ? 'failed' : 'running'
+}
+
+type InstalledState =
+  | { readonly status: 'loading' }
+  | { readonly status: 'ready'; readonly result: MarketInstalledResult }
+  | { readonly status: 'error'; readonly message: string }
+
+/**
+ * The installed panel: the plugins installed into this profile, with
+ * enable/disable and uninstall. It is local profile facts all the way down —
+ * reading them reaches nothing outside this machine, so the panel answers
+ * with the market off too. Uninstall asks once inline before it acts.
+ */
+function InstalledPanel({ t, listInstalled, setInstalledEnabled, uninstallInstalled }: {
+  t: MarketLocale
+  listInstalled: MarketSectionInjected['listInstalled']
+  setInstalledEnabled: MarketSectionInjected['setInstalledEnabled']
+  uninstallInstalled: MarketSectionInjected['uninstallInstalled']
+}): ReactElement {
+  const [state, setState] = useState<InstalledState>({ status: 'loading' })
+  // `${name}:toggle` / `${name}:uninstall`: one verb per panel at a time.
+  const [busy, setBusy] = useState<string | null>(null)
+  const [confirming, setConfirming] = useState<string | null>(null)
+  const [notice, setNotice] = useState('')
+  const [actionError, setActionError] = useState('')
+  const mounted = useRef(true)
+  useEffect(() => () => { mounted.current = false }, [])
+
+  const load = useCallback((): void => {
+    setState(previous => (previous.status === 'ready' ? previous : { status: 'loading' }))
+    void listInstalled().then((result) => {
+      if (!mounted.current) return
+      setState({ status: 'ready', result })
+    }, (error: unknown) => {
+      if (!mounted.current) return
+      setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
+    })
+  }, [listInstalled])
+
+  // One read per mount: the list changes only through this panel's verbs (or
+  // a `dsh plugin` command, which needs a restart anyway) — a poll would add
+  // nothing but motion.
+  useEffect(() => { load() }, [load])
+
+  const describe = (error: unknown): string => error instanceof Error ? error.message : String(error)
+
+  const toggle = (item: MarketInstalledPackage): void => {
+    setBusy(`${item.packageName}:toggle`)
+    setActionError('')
+    // A new action retires the last outcome line, whatever it said.
+    setNotice('')
+    void setInstalledEnabled(item.packageName, !item.enabled).then((result) => {
+      if (!mounted.current) return
+      setBusy(null)
+      setState({ status: 'ready', result })
+    }, (error: unknown) => {
+      if (!mounted.current) return
+      setBusy(null)
+      setActionError(t('installed.actionFailed', { reason: describe(error) }))
+      // The durable half may have landed even when the live half reports a
+      // failure — what the list says now is the truth to show.
+      setState(previous => (previous.status === 'ready' ? { status: 'loading' } : previous))
+      load()
+    })
+  }
+
+  const uninstall = (item: MarketInstalledPackage): void => {
+    setBusy(`${item.packageName}:uninstall`)
+    setConfirming(null)
+    setActionError('')
+    setNotice('')
+    void uninstallInstalled(item.packageName).then((result) => {
+      if (!mounted.current) return
+      setBusy(null)
+      setNotice(t('installed.uninstalled', { name: item.packageName }))
+      setState({ status: 'ready', result })
+    }, (error: unknown) => {
+      if (!mounted.current) return
+      setBusy(null)
+      setActionError(t('installed.actionFailed', { reason: describe(error) }))
+      setState(previous => (previous.status === 'ready' ? { status: 'loading' } : previous))
+      load()
+    })
+  }
+
+  const stateLabels: Record<ReturnType<typeof stateOf>, () => string> = {
+    running: () => t('installed.running'),
+    disabled: () => t('installed.disabled'),
+    failed: () => t('installed.failedState'),
+    readFailed: () => t('installed.readFailedState'),
+    installed: () => t('installed.installedState'),
+  }
+
+  return (
+    <section className="dsh_market_installed">
+      <div className="dsh_market_installedHead">
+        <h3 className="dsh_market_installedTitle">{t('installed.title')}</h3>
+        {state.status === 'ready' && state.result.error === '' && (
+          <span className="dsh_market_installedCount">{t('installed.count', { count: String(state.result.packages.length) })}</span>
+        )}
+        <button
+          type="button"
+          className="dsh_market_ghost dsh_market_installedRefresh"
+          onClick={() => { setState({ status: 'loading' }); setNotice(''); setActionError(''); load() }}
+        >
+          {t('refresh')}
+        </button>
+      </div>
+      <p className="dsh_market_installedBody">{t('installed.body')}</p>
+      {notice !== '' && <p className="dsh_market_installedNotice">{notice}</p>}
+      {actionError !== '' && (
+        <p className="dsh_market_status" data-error="true">{actionError}</p>
+      )}
+      {state.status === 'loading' && <p className="dsh_market_status">{t('installed.loading')}</p>}
+      {state.status === 'error' && (
+        <p className="dsh_market_status" data-error="true">
+          {t('installed.failed', { reason: state.message })}
+          <button type="button" className="dsh_market_ghost" onClick={() => { setState({ status: 'loading' }); load() }}>{t('retry')}</button>
+        </p>
+      )}
+      {state.status === 'ready' && state.result.error !== '' && (
+        <p className="dsh_market_status" data-error="true">{t('installed.failed', { reason: state.result.error })}</p>
+      )}
+      {state.status === 'ready' && state.result.error === '' && state.result.packages.length === 0 && (
+        <p className="dsh_market_status">{t('installed.empty')}</p>
+      )}
+      {state.status === 'ready' && state.result.packages.length > 0 && (
+        <ul className="dsh_market_installedList">
+          {state.result.packages.map((item) => {
+            const busyRow = busy !== null && (busy === `${item.packageName}:toggle` || busy === `${item.packageName}:uninstall`)
+            return (
+              <li key={item.packageName} className="dsh_market_installedRow">
+                <div className="dsh_market_installedRowHead">
+                  <span className="dsh_market_installedName" title={item.packageName}>{shortName(item.packageName)}</span>
+                  {item.self && <span className="dsh_market_installedTag">{t('installed.self')}</span>}
+                  {item.version !== '' && <span className="dsh_market_installedVersion">{`v${item.version}`}</span>}
+                  <span className="dsh_market_installedState" data-state={stateOf(item)}>{stateLabels[stateOf(item)]()}</span>
+                </div>
+                {item.description !== '' && <p className="dsh_market_installedDesc">{item.description}</p>}
+                {item.error !== '' && <p className="dsh_market_status" data-error="true">{t('installed.readFailed', { reason: item.error })}</p>}
+                <div className="dsh_market_installedActions">
+                  {confirming === item.packageName
+                    ? (
+                      <>
+                        <span className="dsh_market_installedConfirm">{t('installed.confirmUninstall', { name: item.packageName })}</span>
+                        <button
+                          type="button"
+                          className="dsh_market_danger"
+                          disabled={busyRow}
+                          onClick={() => { uninstall(item) }}
+                        >
+                          {busy === `${item.packageName}:uninstall` ? t('installed.uninstalling') : t('installed.confirm')}
+                        </button>
+                        <button
+                          type="button"
+                          className="dsh_market_ghost"
+                          disabled={busyRow}
+                          onClick={() => { setConfirming(null) }}
+                        >
+                          {t('installed.cancel')}
+                        </button>
+                      </>
+                      )
+                    : (
+                      <>
+                        {!item.self && (
+                          <button
+                            type="button"
+                            className="dsh_market_ghost"
+                            disabled={busyRow || busy !== null || item.error !== '' || item.entries.length === 0}
+                            onClick={() => { toggle(item) }}
+                          >
+                            {busy === `${item.packageName}:toggle`
+                              ? (item.enabled ? t('installed.disabling') : t('installed.enabling'))
+                              : (item.enabled ? t('installed.disable') : t('installed.enable'))}
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          className="dsh_market_danger"
+                          disabled={busyRow || busy !== null}
+                          onClick={() => { setConfirming(item.packageName) }}
+                        >
+                          {t('installed.uninstall')}
+                        </button>
+                      </>
+                      )}
+                </div>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 /** The Plugins page. */
-function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, installBusy, onInstall }: {
+function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstalled, setInstalledEnabled, uninstallInstalled, cards, installBusy, onInstall }: {
   t: MarketLocale
   english: boolean
   snapshot: SafeMarketSnapshot
   setEnabled: MarketSectionInjected['setEnabled']
   loadCatalog: MarketSectionInjected['loadCatalog']
+  listInstalled: MarketSectionInjected['listInstalled']
+  setInstalledEnabled: MarketSectionInjected['setInstalledEnabled']
+  uninstallInstalled: MarketSectionInjected['uninstallInstalled']
   cards: Readonly<Record<string, CardState>>
   installBusy: boolean
   onInstall: (target: MarketPlugin, prompt: string) => void
@@ -154,8 +375,11 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, ins
   }
 
   if (!enabled) {
+    // The installed panel stays up with the market off: it lists and manages
+    // what this machine already has, which reaches nothing outside it.
     return (
       <div className="dsh_market_page">
+        <InstalledPanel t={t} listInstalled={listInstalled} setInstalledEnabled={setInstalledEnabled} uninstallInstalled={uninstallInstalled} />
         <div className="dsh_market_intro">
           <p className="dsh_market_introTitle">{t('intro.title')}</p>
           <p className="dsh_market_introBody">{t('intro.body')}</p>
@@ -198,6 +422,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, ins
 
   return (
     <div className="dsh_market_page">
+      <InstalledPanel t={t} listInstalled={listInstalled} setInstalledEnabled={setInstalledEnabled} uninstallInstalled={uninstallInstalled} />
       <div className="dsh_market_bar">
         <input
           className="dsh_market_search"
@@ -333,7 +558,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, cards, ins
 
 /** The Marketplace section. */
 export function MarketSection({
-  useScope, setEnabled, loadCatalog, listSkills, install, close, t,
+  useScope, setEnabled, loadCatalog, listSkills, install, listInstalled, setInstalledEnabled, uninstallInstalled, close, t,
 }: MarketSectionProps): ReactElement {
   const snapshot = useScope(value => value)
   // The slot props carry a translate function, not a locale tag; the
@@ -425,6 +650,9 @@ export function MarketSection({
           snapshot={snapshot}
           setEnabled={setEnabled}
           loadCatalog={loadCatalog}
+          listInstalled={listInstalled}
+          setInstalledEnabled={setInstalledEnabled}
+          uninstallInstalled={uninstallInstalled}
           cards={cards}
           installBusy={installBusy}
           onInstall={runInstall}

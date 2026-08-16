@@ -49,6 +49,21 @@ export const TYPERT_MANIFEST: TypertContribution = {
             name: 'updateSettings',
             signature: 'updateSettings(update: SafeMarketSettingsUpdate): Promise<SafeMarketSettings>',
           },
+          {
+            kind: 'method',
+            name: 'listInstalled',
+            signature: 'listInstalled(): Promise<MarketInstalledResult>',
+          },
+          {
+            kind: 'method',
+            name: 'setInstalledEnabled',
+            signature: 'setInstalledEnabled(update: SetInstalledEnabledUpdate): Promise<MarketInstalledResult>',
+          },
+          {
+            kind: 'method',
+            name: 'uninstallInstalled',
+            signature: 'uninstallInstalled(update: UninstallInstalledUpdate): Promise<MarketInstalledResult>',
+          },
         ],
         types: [],
       },

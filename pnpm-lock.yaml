@@ -8,6 +8,9 @@ importers:
 
   .:
     dependencies:
+      yaml:
+        specifier: ^2.8.0
+        version: 2.9.0
       zod:
         specifier: ^4.4.3
         version: 4.4.3
@@ -15,6 +18,9 @@ importers:
       '@deepseek-ai/cordis':
         specifier: 4.0.1
         version: 4.0.1(@deepseek-ai/cordis-plugin-include@1.0.6)(@deepseek-ai/cordis-plugin-loader@1.0.2)
+      '@deepseek-ai/cordis-plugin-loader':
+        specifier: 1.0.2
+        version: 1.0.2(@deepseek-ai/cordis@4.0.1)
       '@deepseek-ai/dsh-api-remotes':
         specifier: 0.1.0-rc.6
         version: 0.1.0-rc.6(963f21f11cddd09def26a2473cddd8c5)
@@ -1190,6 +1196,11 @@ packages:
         optional: true
       utf-8-validate:
         optional: true
+
+  yaml@2.9.0:
+    resolution: {integrity: sha512-2AvhNX3mb8zd6Zy7INTtSpl1F15HW6Wnqj0srWlkKLcpYl/gMIMJiyuGq2KeI2YFxUPjdlB+3Lc10seMLtL4cA==}
+    engines: {node: '>= 14.6'}
+    hasBin: true
 
   zod@4.4.3:
     resolution: {integrity: sha512-ytENFjIJFl2UwYglde2jchW2Hwm4GJFLDiSXWdTrJQBIN9Fcyp7n4DhxJEiWNAJMV1/BqWfW/kkg71UDcHJyTQ==}
@@ -2590,6 +2601,8 @@ snapshots:
       vfile-message: 4.0.3
 
   ws@8.21.3: {}
+
+  yaml@2.9.0: {}
 
   zod@4.4.3: {}
 

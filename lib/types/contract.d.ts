@@ -120,6 +120,54 @@ export type SafeMarketSettingsUpdate = {
     readonly field: 'enabled';
     readonly value: boolean;
 };
+/**
+ * The only npm package-name shape the installed-panel verbs accept. The
+ * membership check against the profile's bundle list is the real gate; this
+ * codec just keeps wire text in the shape of a name at all.
+ */
+export declare const PACKAGE_NAME_PATTERN: RegExp;
+/** Live state of one loader entry an installed bundle introduces. */
+export interface MarketInstalledEntry {
+    /** The patch-addressable entry id (no `include:` prefix). */
+    readonly id: string;
+    /** The module specifier the entry imports. */
+    readonly name: string;
+    /** Whether the entry exists in the live Loader tree. */
+    readonly present: boolean;
+    /** Effective enablement (a disabled ancestor group included). */
+    readonly enabled: boolean;
+    /** The entry's fiber phase, or null while no fiber exists. */
+    readonly phase: 'pending' | 'loading' | 'active' | 'failed' | 'disposed' | 'unloading' | null;
+}
+/** One user-installed plugin package, with the live state of its entries. */
+export interface MarketInstalledPackage {
+    readonly packageName: string;
+    readonly version: string;
+    readonly description: string;
+    /** The market's own row: listed, but the panel must not disable it. */
+    readonly self: boolean;
+    /** Package-level enablement: at least one of its entries is enabled. */
+    readonly enabled: boolean;
+    readonly entries: readonly MarketInstalledEntry[];
+    /** Why the bundle could not be read (uninstall stays available); '' when read. */
+    readonly error: string;
+}
+/** The installed-panel read: the packages, or the reason the profile read failed. */
+export interface MarketInstalledResult {
+    readonly packages: readonly MarketInstalledPackage[];
+    /** The profile the list describes (the panel names it in its explainer). */
+    readonly profile: string;
+    readonly error: string;
+}
+/** One enable/disable request for an installed package. */
+export interface SetInstalledEnabledUpdate {
+    readonly packageName: string;
+    readonly enabled: boolean;
+}
+/** One uninstall request for an installed package. */
+export interface UninstallInstalledUpdate {
+    readonly packageName: string;
+}
 /** Strict wire codec for one market row. */
 export declare const marketPluginSchema: z.ZodReadonly<z.ZodObject<{
     fullName: z.ZodString;
@@ -236,5 +284,81 @@ export declare const safeMarketSettingsUpdateSchema: z.ZodDiscriminatedUnion<[z.
     field: z.ZodLiteral<"enabled">;
     value: z.ZodBoolean;
 }, z.core.$strip>>], "field">;
+/** Strict wire codec for an npm package name. */
+export declare const packageNameSchema: z.ZodString;
+/** Strict wire codec for one installed entry's live state. */
+export declare const marketInstalledEntrySchema: z.ZodReadonly<z.ZodObject<{
+    id: z.ZodString;
+    name: z.ZodString;
+    present: z.ZodBoolean;
+    enabled: z.ZodBoolean;
+    phase: z.ZodUnion<readonly [z.ZodEnum<{
+        pending: "pending";
+        loading: "loading";
+        active: "active";
+        failed: "failed";
+        disposed: "disposed";
+        unloading: "unloading";
+    }>, z.ZodNull]>;
+}, z.core.$strip>>;
+/** Strict wire codec for one installed package. */
+export declare const marketInstalledPackageSchema: z.ZodReadonly<z.ZodObject<{
+    packageName: z.ZodString;
+    version: z.ZodString;
+    description: z.ZodString;
+    self: z.ZodBoolean;
+    enabled: z.ZodBoolean;
+    entries: z.ZodReadonly<z.ZodArray<z.ZodReadonly<z.ZodObject<{
+        id: z.ZodString;
+        name: z.ZodString;
+        present: z.ZodBoolean;
+        enabled: z.ZodBoolean;
+        phase: z.ZodUnion<readonly [z.ZodEnum<{
+            pending: "pending";
+            loading: "loading";
+            active: "active";
+            failed: "failed";
+            disposed: "disposed";
+            unloading: "unloading";
+        }>, z.ZodNull]>;
+    }, z.core.$strip>>>>;
+    error: z.ZodString;
+}, z.core.$strip>>;
+/** Strict wire codec for the installed-panel read. */
+export declare const marketInstalledResultSchema: z.ZodReadonly<z.ZodObject<{
+    packages: z.ZodReadonly<z.ZodArray<z.ZodReadonly<z.ZodObject<{
+        packageName: z.ZodString;
+        version: z.ZodString;
+        description: z.ZodString;
+        self: z.ZodBoolean;
+        enabled: z.ZodBoolean;
+        entries: z.ZodReadonly<z.ZodArray<z.ZodReadonly<z.ZodObject<{
+            id: z.ZodString;
+            name: z.ZodString;
+            present: z.ZodBoolean;
+            enabled: z.ZodBoolean;
+            phase: z.ZodUnion<readonly [z.ZodEnum<{
+                pending: "pending";
+                loading: "loading";
+                active: "active";
+                failed: "failed";
+                disposed: "disposed";
+                unloading: "unloading";
+            }>, z.ZodNull]>;
+        }, z.core.$strip>>>>;
+        error: z.ZodString;
+    }, z.core.$strip>>>>;
+    profile: z.ZodString;
+    error: z.ZodString;
+}, z.core.$strip>>;
+/** Strict wire codec for one enable/disable request. */
+export declare const setInstalledEnabledUpdateSchema: z.ZodReadonly<z.ZodObject<{
+    packageName: z.ZodString;
+    enabled: z.ZodBoolean;
+}, z.core.$strip>>;
+/** Strict wire codec for one uninstall request. */
+export declare const uninstallInstalledUpdateSchema: z.ZodReadonly<z.ZodObject<{
+    packageName: z.ZodString;
+}, z.core.$strip>>;
 /** The safeMarket Remote namespace's strict invocation descriptors. */
 export declare const SAFE_MARKET_INVOCATIONS: readonly InvocationDescriptor[];

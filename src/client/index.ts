@@ -25,6 +25,7 @@ import type { IConversation } from '@deepseek-ai/dsh-client-ui-conversation/clie
 import type {
   MarketCatalogResult,
   MarketEnvironment,
+  MarketInstalledResult,
   MarketPlugin,
   MarketSkillsResult,
   SafeMarketSettings,
@@ -34,6 +35,7 @@ import { SAFE_MARKET_REMOTE } from './remote.ts'
 import { MarketSection, type InstallOutcome, type MarketSectionInjected } from './MarketSection.tsx'
 import { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 import { en, zh, type SafeMarketLocaleKey } from './locales.ts'
+import { adoptNavIcon } from './navIcon.ts'
 import { adoptStyles } from './styles.ts'
 
 export type { MarketSectionInjected, MarketSectionProps, InstallOutcome } from './MarketSection.tsx'
@@ -64,6 +66,9 @@ interface SafeMarketFace {
   describe(): Promise<{ ok: true; value: MarketEnvironment } | { ok: false; error: { code: string; message: string } }>
   getSettings(): Promise<{ ok: true; value: SafeMarketSettings } | { ok: false; error: { code: string; message: string } }>
   updateSettings(update: SafeMarketSettingsUpdate): Promise<{ ok: true; value: SafeMarketSettings } | { ok: false; error: { code: string; message: string } }>
+  listInstalled(): Promise<{ ok: true; value: MarketInstalledResult } | { ok: false; error: { code: string; message: string } }>
+  setInstalledEnabled(update: { packageName: string; enabled: boolean }): Promise<{ ok: true; value: MarketInstalledResult } | { ok: false; error: { code: string; message: string } }>
+  uninstallInstalled(update: { packageName: string }): Promise<{ ok: true; value: MarketInstalledResult } | { ok: false; error: { code: string; message: string } }>
 }
 
 const defaultSettings = (): SafeMarketSettings => ({ enabled: false })
@@ -79,6 +84,9 @@ function wait(ms: number): Promise<void> {
 export function apply(ctx: ClientContext): void {
   adoptStyles()
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-desktop-safe-market: dictionaries')
+  // The settings shell hardcodes section nav icons by id (unknown ids get the
+  // gear); re-skin this section's row with the market's own storefront.
+  ctx.effect(() => adoptNavIcon(), 'dsh-desktop-safe-market: nav icon')
 
   const scope = createSnapshotStore({ value: defaultSettings(), profile: null as string | null })
   let settingsGeneration = 0
@@ -202,6 +210,31 @@ export function apply(ctx: ClientContext): void {
     return result.value
   }
 
+  /** The installed-panel verbs: local profile facts, so they need no market switch. */
+  const listInstalled = async (): Promise<MarketInstalledResult> => {
+    const remote = market
+    if (remote === undefined) throw new Error('the safeMarket Remote is not mounted')
+    const result = await remote.listInstalled()
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+
+  const setInstalledEnabled = async (packageName: string, enabled: boolean): Promise<MarketInstalledResult> => {
+    const remote = market
+    if (remote === undefined) throw new Error('the safeMarket Remote is not mounted')
+    const result = await remote.setInstalledEnabled({ packageName, enabled })
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+
+  const uninstallInstalled = async (packageName: string): Promise<MarketInstalledResult> => {
+    const remote = market
+    if (remote === undefined) throw new Error('the safeMarket Remote is not mounted')
+    const result = await remote.uninstallInstalled({ packageName })
+    if (!result.ok) throw new Error(`${result.error.code}: ${result.error.message}`)
+    return result.value
+  }
+
   /**
    * The install hand-off. Every step goes through a published service face:
    * the workspace domain resolves and connects the target, the session domain
@@ -268,6 +301,9 @@ export function apply(ctx: ClientContext): void {
       loadCatalog,
       listSkills,
       install,
+      listInstalled,
+      setInstalledEnabled,
+      uninstallInstalled,
     }),
   }, MarketSection))
 }

@@ -16,7 +16,8 @@ export declare const name = "dsh-desktop-safe-market";
 /**
  * Services required before load. `skills` and `storageDomain` join the
  * settings and Typert seats: the market lists what this deployment can
- * resolve, and keeps its reduction across restarts.
+ * resolve, and keeps its reduction across restarts. `loader` is the installed
+ * panel's live view of the entry tree its enable/disable verbs nudge.
  */
 export declare const inject: string[];
 export type { MarketCatalog, MarketCatalogResult, MarketCategory, MarketEnvironment, MarketPlugin, MarketSkill, MarketSkillsResult, SafeMarketSettings, } from './contract.ts';
