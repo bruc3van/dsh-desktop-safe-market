@@ -1,6 +1,6 @@
 import { type ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
 import { type SafeMarketLocaleKey } from './locales.ts';
-export type { MarketSectionInjected, MarketSectionProps, InstallOutcome } from './MarketSection.tsx';
+export type { ChooseWorkspaceOutcome, InstallOutcome, MarketSectionInjected, MarketSectionProps, WorkspaceReadiness, } from './MarketSection.tsx';
 export type { SafeMarketLocaleKey } from './locales.ts';
 export { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx';
 declare module '@deepseek-ai/dsh-client-ui-slots' {

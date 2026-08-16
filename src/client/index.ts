@@ -32,13 +32,25 @@ import type {
   SafeMarketSettingsUpdate,
 } from '../contract.ts'
 import { SAFE_MARKET_REMOTE } from './remote.ts'
-import { MarketSection, type InstallOutcome, type MarketSectionInjected } from './MarketSection.tsx'
+import {
+  MarketSection,
+  type ChooseWorkspaceOutcome,
+  type InstallOutcome,
+  type MarketSectionInjected,
+  type WorkspaceReadiness,
+} from './MarketSection.tsx'
 import { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 import { en, zh, type SafeMarketLocaleKey } from './locales.ts'
 import { adoptNavIcon } from './navIcon.ts'
 import { adoptStyles } from './styles.ts'
 
-export type { MarketSectionInjected, MarketSectionProps, InstallOutcome } from './MarketSection.tsx'
+export type {
+  ChooseWorkspaceOutcome,
+  InstallOutcome,
+  MarketSectionInjected,
+  MarketSectionProps,
+  WorkspaceReadiness,
+} from './MarketSection.tsx'
 export type { SafeMarketLocaleKey } from './locales.ts'
 export { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 
@@ -58,6 +70,11 @@ export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'c
 /** How long the hand-off waits for a freshly opened session to own a client scope. */
 const SCOPE_WAIT_MS = 4_000
 const SCOPE_POLL_MS = 60
+/** How long a freshly registered workspace gets to reach the list mirror. */
+const WORKSPACE_WAIT_MS = 4_000
+
+/** The workspace identity the domain's own projections speak in. */
+type WorkspaceTarget = NonNullable<ReturnType<IWorkspaces['list']['getSnapshot']>['recentWorkspaceId']>
 
 /** The mounted safeMarket namespace service's callable face. */
 interface SafeMarketFace {
@@ -236,29 +253,14 @@ export function apply(ctx: ClientContext): void {
   }
 
   /**
-   * The install hand-off. Every step goes through a published service face:
-   * the workspace domain resolves and connects the target, the session domain
-   * navigates to it, and the conversation face writes the draft. Nothing here
-   * reads the DOM, and nothing here sends.
+   * The second half of every install hand-off: connect the workspace, navigate
+   * to its session, and write the draft. Every step goes through a published
+   * service face; nothing here reads the DOM, and nothing here sends.
    */
-  const install = async (target: MarketPlugin, prompt: string): Promise<InstallOutcome> => {
+  const stageIn = async (workspaceId: WorkspaceTarget, prompt: string): Promise<InstallOutcome> => {
     const workspaces = ctx.get('workspaces') as IWorkspaces
     const sessions = ctx.get('sessions') as unknown as ISessions
     const conversation = ctx.get('conversation') as IConversation
-
-    // The same target rule the shell's own New Session action uses: the
-    // current session's workspace, then the recency projection. Both derive
-    // from the two-baseline readiness flag — in the first moments of boot
-    // `items` is still empty and "no workspace yet" would be a wrong answer.
-    const workspaceState = workspaces.list.getSnapshot()
-    if (!workspaceState.baselinesReady) return { ok: false, reason: 'not-ready' }
-    const current = sessions.list.getSnapshot().current
-    const currentWorkspaceId = current === undefined
-      ? undefined
-      : workspaceState.items.find(item => item.sessionIds.includes(current))?.workspaceId
-    const workspaceId = currentWorkspaceId ?? workspaceState.recentWorkspaceId
-    if (workspaceId === undefined) return { ok: false, reason: 'no-workspace' }
-
     try {
       const sessionId = await workspaces.connectWorkspace(workspaceId)
       sessions.open(sessionId)
@@ -281,6 +283,88 @@ export function apply(ctx: ClientContext): void {
     }
   }
 
+  /**
+   * Register a directory as a Workspace, through the Host's own picker.
+   *
+   * The directory is the one thing here that cannot be inferred: it is where
+   * the agent will work, so the choice stays with the person making it. What
+   * this removes is the errand — the old answer sent them to the sidebar and
+   * asked them to come back and start over.
+   */
+  const chooseWorkspaceId = async (): Promise<
+    | { ok: true; id: WorkspaceTarget; path: string }
+    | { ok: false; reason: 'cancelled' }
+    | { ok: false; reason: 'failed'; message: string }
+  > => {
+    const workspaces = ctx.get('workspaces') as IWorkspaces
+    try {
+      const path = await workspaces.pickDirectory()
+      // A cancelled picker is an answer, not a failure: the user changed
+      // their mind, and the card says so instead of showing an error.
+      if (path === null) return { ok: false, reason: 'cancelled' }
+      const created = await workspaces.create({ path })
+      // `connectWorkspace` resolves against the list mirror, which the create
+      // response reaches one projection later. Same shape as the scope wait.
+      const deadline = Date.now() + WORKSPACE_WAIT_MS
+      while (Date.now() < deadline
+        && !workspaces.list.getSnapshot().items.some(item => item.workspaceId === created.workspaceId)) {
+        await wait(SCOPE_POLL_MS)
+      }
+      return { ok: true, id: created.workspaceId, path }
+    } catch (error) {
+      return { ok: false, reason: 'failed', message: error instanceof Error ? error.message : String(error) }
+    }
+  }
+
+  /**
+   * The install hand-off: resolve the workspace, then stage the prompt in it.
+   */
+  const install = async (target: MarketPlugin, prompt: string): Promise<InstallOutcome> => {
+    const workspaces = ctx.get('workspaces') as IWorkspaces
+    const sessions = ctx.get('sessions') as unknown as ISessions
+
+    // The same target rule the shell's own New Session action uses: the
+    // current session's workspace, then the recency projection. Both derive
+    // from the two-baseline readiness flag — in the first moments of boot
+    // `items` is still empty and "no workspace yet" would be a wrong answer.
+    const workspaceState = workspaces.list.getSnapshot()
+    if (!workspaceState.baselinesReady) return { ok: false, reason: 'not-ready' }
+    const current = sessions.list.getSnapshot().current
+    const currentWorkspaceId = current === undefined
+      ? undefined
+      : workspaceState.items.find(item => item.sessionIds.includes(current))?.workspaceId
+    const workspaceId = currentWorkspaceId ?? workspaceState.recentWorkspaceId
+    if (workspaceId === undefined) return { ok: false, reason: 'no-workspace' }
+    return await stageIn(workspaceId, prompt)
+  }
+
+  /** The install hand-off for a deployment with no workspace yet. */
+  const installIntoNewWorkspace = async (target: MarketPlugin, prompt: string): Promise<InstallOutcome> => {
+    const chosen = await chooseWorkspaceId()
+    if (!chosen.ok) return chosen
+    return await stageIn(chosen.id, prompt)
+  }
+
+  /** Pick and register a workspace on its own, for the page's standing notice. */
+  const chooseWorkspace = async (): Promise<ChooseWorkspaceOutcome> => {
+    const chosen = await chooseWorkspaceId()
+    return chosen.ok ? { ok: true, path: chosen.path } : chosen
+  }
+
+  /**
+   * Live workspace readiness for the notice at the top of the Plugins page,
+   * read straight off the domain's own list store so it clears itself the
+   * moment a workspace appears — from this flow or from anywhere else.
+   */
+  const workspaceReadiness = {
+    getSnapshot: (): WorkspaceReadiness => {
+      const state = (ctx.get('workspaces') as IWorkspaces).list.getSnapshot()
+      if (!state.baselinesReady) return 'pending'
+      return state.items.length > 0 ? 'present' : 'none'
+    },
+    subscribe: (fn: () => void): (() => void) => (ctx.get('workspaces') as IWorkspaces).list.subscribe(fn),
+  }
+
   const t = ctx.locale.bind(NS)
 
   // A section of its own rather than a tab inside the official Plugins page:
@@ -301,6 +385,9 @@ export function apply(ctx: ClientContext): void {
       loadCatalog,
       listSkills,
       install,
+      installIntoNewWorkspace,
+      chooseWorkspace,
+      workspaceReadiness,
       listInstalled,
       setInstalledEnabled,
       uninstallInstalled,

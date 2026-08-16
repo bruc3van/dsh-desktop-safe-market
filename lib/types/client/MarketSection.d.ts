@@ -43,9 +43,32 @@ export type InstallOutcome = {
     readonly reason: 'no-workspace';
 } | {
     readonly ok: false;
+    readonly reason: 'cancelled';
+} | {
+    readonly ok: false;
     readonly reason: 'failed';
     readonly message: string;
 };
+/** What registering a directory as a Workspace reports back. */
+export type ChooseWorkspaceOutcome = {
+    readonly ok: true;
+    readonly path: string;
+} | {
+    readonly ok: false;
+    readonly reason: 'cancelled';
+} | {
+    readonly ok: false;
+    readonly reason: 'failed';
+    readonly message: string;
+};
+/**
+ * Whether this deployment has a Workspace to install into.
+ *
+ * `pending` is its own answer rather than a flavour of `none`: for the first
+ * moments of a boot the list mirror is legitimately empty, and telling someone
+ * with a dozen workspaces that they have none is worse than saying nothing.
+ */
+export type WorkspaceReadiness = 'pending' | 'none' | 'present';
 /** Injected business face: the live source and the section's verbs. */
 export interface MarketSectionInjected {
     hooks: {
@@ -63,6 +86,18 @@ export interface MarketSectionInjected {
     listSkills: () => Promise<MarketSkillsResult>;
     /** Open a session in the current or most recent workspace and stage the given prompt. */
     install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>;
+    /**
+     * The same hand-off for someone who has no workspace yet: pick a directory
+     * through the Host's own picker, register it, then stage the prompt in it.
+     */
+    installIntoNewWorkspace: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>;
+    /** Pick a directory and register it as a Workspace, installing nothing. */
+    chooseWorkspace: () => Promise<ChooseWorkspaceOutcome>;
+    /** Live answer to "is there a workspace to install into?". */
+    workspaceReadiness: {
+        getSnapshot: () => WorkspaceReadiness;
+        subscribe: (fn: () => void) => () => void;
+    };
     /** Read the plugins installed into this profile, with live enable state. */
     listInstalled: () => Promise<MarketInstalledResult>;
     /** Enable or disable one installed package (durable and immediate). */
@@ -73,4 +108,4 @@ export interface MarketSectionInjected {
 /** Full section props: runtime share + injected face + locale seat. */
 export type MarketSectionProps = PropsRuntime<'settings.section'> & InjectFace<MarketSectionInjected> & PropsLocale<'settings.safeMarket'>;
 /** The Marketplace section. */
-export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, install, listInstalled, setInstalledEnabled, uninstallInstalled, close, t, }: MarketSectionProps): ReactElement;
+export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, install, installIntoNewWorkspace, chooseWorkspace, workspaceReadiness, listInstalled, setInstalledEnabled, uninstallInstalled, close, t, }: MarketSectionProps): ReactElement;

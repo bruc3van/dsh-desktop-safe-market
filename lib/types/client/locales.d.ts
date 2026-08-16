@@ -52,10 +52,17 @@ export declare const zh: {
     readonly staged: "已在新会话填入审查提示词";
     readonly 'staged.hint': "关闭本设置窗口，看过提示词后按回车执行。";
     readonly 'install.failed': "打开会话失败：{reason}";
-    readonly 'install.noWorkspace': "还没有工作区。请先在侧边栏选择一个工作区，再回来安装。";
+    readonly 'install.noWorkspace': "还没有工作区。选一个文件夹作为工作区，就继续安装。";
+    readonly 'install.pickAndInstall': "选择文件夹并安装";
+    readonly 'install.picking': "正在选择文件夹…";
+    readonly 'install.cancelled': "已取消，没有创建工作区。";
     readonly 'install.notReady': "工作区列表还在加载，请稍后再试。";
     readonly 'install.profilePending': "安装命令的目标 profile 尚未确认，安装按钮暂不可用。";
     readonly repo: "GitHub";
+    readonly 'workspace.needed': "还没有工作区。安装插件前需要先选一个文件夹作为工作区——agent 就在那里干活。";
+    readonly 'workspace.choose': "现在选";
+    readonly 'workspace.choosing': "正在选择…";
+    readonly 'workspace.failed': "创建工作区失败：{reason}";
     readonly 'installed.title': "已安装的插件";
     readonly 'installed.count': "共 {count} 个";
     readonly 'installed.body': string;

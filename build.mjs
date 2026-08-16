@@ -12,6 +12,8 @@
 import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
 import { mkdirSync, readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
+import { pathToFileURL } from 'node:url'
 
 // The version lives in two seats (package.json and dsh.plugin.json) and
 // nothing syncs them but this gate: a drifted manifest would ship a release
@@ -26,7 +28,20 @@ mkdirSync('lib', { recursive: true })
 
 const dshExternal = ['@deepseek-ai/cordis', '@deepseek-ai/dsh-*']
 
-for (const entry of ['src/index.ts', 'src/invariant.ts']) {
+/**
+ * A bundled CommonJS dependency keeps its own `require` calls, and esbuild
+ * rewrites them to a shim that throws unless a real `require` is in scope —
+ * which, in an ESM output, there is not. `yaml` reaches for `process` while
+ * its module body evaluates, so the throw lands at IMPORT time and takes the
+ * whole plugin tree down with it (0.2.0 shipped exactly that). Hand the shim
+ * the real thing instead of hunting the next dependency that needs it.
+ */
+const esmRequireBanner = {
+  js: "import { createRequire as __createRequire } from 'node:module'\nconst require = __createRequire(import.meta.url)\n",
+}
+
+const hostEntries = ['src/index.ts', 'src/invariant.ts']
+for (const entry of hostEntries) {
   await build({
     entryPoints: [entry],
     outfile: entry.replace('src/', 'lib/').replace('.ts', '.js'),
@@ -36,8 +51,22 @@ for (const entry of ['src/index.ts', 'src/invariant.ts']) {
     target: ['node22'],
     sourcemap: true,
     external: dshExternal,
+    banner: esmRequireBanner,
     logLevel: 'info',
   })
+}
+
+// The banner above is only half the fix: nothing else in this pipeline ever
+// imports the host bundle, so a module-eval throw reaches the user as "the
+// marketplace vanished" rather than as a failed build. Import it here, which
+// is exactly what the Loader does with it.
+for (const entry of hostEntries) {
+  const outfile = entry.replace('src/', 'lib/').replace('.ts', '.js')
+  try {
+    await import(pathToFileURL(resolve(outfile)).href)
+  } catch (error) {
+    throw new Error(`${outfile} does not import under ESM: ${error instanceof Error ? error.message : String(error)}`)
+  }
 }
 
 await build({

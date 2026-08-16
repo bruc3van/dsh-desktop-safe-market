@@ -100,6 +100,25 @@ export const cssText = `
   font-size: 12px;
   line-height: 18px;
 }
+/* The standing "no workspace yet" notice: the intro card's shape, but it
+   states a prerequisite rather than asking a question, so it stays quiet. */
+.dsh_market_notice {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 12px 16px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 10px;
+  background: var(--dsw-alias-bg-layer-2);
+}
+.dsh_market_noticeBody {
+  margin: 0;
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--dsw-alias-label-secondary);
+}
+
 .dsh_market_introActions {
   display: flex;
   align-items: center;
@@ -334,6 +353,13 @@ export const cssText = `
 }
 .dsh_market_cardError {
   color: var(--dsw-alias-state-error-primary);
+}
+/* A missing workspace is a prerequisite, not a failure — the card says it in
+   the ordinary secondary voice and keeps its action next to it. */
+.dsh_market_cardNotice {
+  color: var(--dsw-alias-label-secondary);
+  font-size: 12px;
+  line-height: 18px;
 }
 
 .dsh_market_note {

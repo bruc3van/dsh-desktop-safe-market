@@ -16,7 +16,7 @@
  * so staging the prompt can end with the user looking at the session it was
  * staged in.
  */
-import { useCallback, useEffect, useId, useRef, useState, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
@@ -48,7 +48,23 @@ export type InstallOutcome =
   | { readonly ok: true }
   | { readonly ok: false; readonly reason: 'not-ready' }
   | { readonly ok: false; readonly reason: 'no-workspace' }
+  | { readonly ok: false; readonly reason: 'cancelled' }
   | { readonly ok: false; readonly reason: 'failed'; readonly message: string }
+
+/** What registering a directory as a Workspace reports back. */
+export type ChooseWorkspaceOutcome =
+  | { readonly ok: true; readonly path: string }
+  | { readonly ok: false; readonly reason: 'cancelled' }
+  | { readonly ok: false; readonly reason: 'failed'; readonly message: string }
+
+/**
+ * Whether this deployment has a Workspace to install into.
+ *
+ * `pending` is its own answer rather than a flavour of `none`: for the first
+ * moments of a boot the list mirror is legitimately empty, and telling someone
+ * with a dozen workspaces that they have none is worse than saying nothing.
+ */
+export type WorkspaceReadiness = 'pending' | 'none' | 'present'
 
 /** Injected business face: the live source and the section's verbs. */
 export interface MarketSectionInjected {
@@ -61,6 +77,18 @@ export interface MarketSectionInjected {
   listSkills: () => Promise<MarketSkillsResult>
   /** Open a session in the current or most recent workspace and stage the given prompt. */
   install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>
+  /**
+   * The same hand-off for someone who has no workspace yet: pick a directory
+   * through the Host's own picker, register it, then stage the prompt in it.
+   */
+  installIntoNewWorkspace: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>
+  /** Pick a directory and register it as a Workspace, installing nothing. */
+  chooseWorkspace: () => Promise<ChooseWorkspaceOutcome>
+  /** Live answer to "is there a workspace to install into?". */
+  workspaceReadiness: {
+    getSnapshot: () => WorkspaceReadiness
+    subscribe: (fn: () => void) => () => void
+  }
   /** Read the plugins installed into this profile, with live enable state. */
   listInstalled: () => Promise<MarketInstalledResult>
   /** Enable or disable one installed package (durable and immediate). */
@@ -83,6 +111,10 @@ type CatalogState =
 
 type CardState =
   | { readonly status: 'busy' }
+  /** The Host's directory picker is open for this card. */
+  | { readonly status: 'picking' }
+  /** The install is one directory choice away; the card offers to make it. */
+  | { readonly status: 'needs-workspace'; readonly message: string }
   | { readonly status: 'staged' }
   | { readonly status: 'error'; readonly message: string }
 
@@ -314,7 +346,7 @@ function InstalledPanel({ t, listInstalled, setInstalledEnabled, uninstallInstal
 }
 
 /** The Plugins page. */
-function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstalled, setInstalledEnabled, uninstallInstalled, cards, installBusy, onInstall }: {
+function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstalled, setInstalledEnabled, uninstallInstalled, chooseWorkspace, workspaceReadiness, cards, installBusy, onInstall }: {
   t: MarketLocale
   english: boolean
   snapshot: SafeMarketSnapshot
@@ -323,9 +355,11 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   listInstalled: MarketSectionInjected['listInstalled']
   setInstalledEnabled: MarketSectionInjected['setInstalledEnabled']
   uninstallInstalled: MarketSectionInjected['uninstallInstalled']
+  chooseWorkspace: MarketSectionInjected['chooseWorkspace']
+  workspaceReadiness: MarketSectionInjected['workspaceReadiness']
   cards: Readonly<Record<string, CardState>>
   installBusy: boolean
-  onInstall: (target: MarketPlugin, prompt: string) => void
+  onInstall: (target: MarketPlugin, prompt: string, viaNewWorkspace: boolean) => void
 }): ReactElement {
   const [state, setState] = useState<CatalogState>({ status: 'idle' })
   const [switching, setSwitching] = useState(false)
@@ -334,7 +368,14 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
+  // The notice's own state, kept apart from the cards': it can be answered
+  // before any card has been clicked.
+  const [choosing, setChoosing] = useState(false)
+  const [chooseError, setChooseError] = useState('')
   const enabled = snapshot.value.enabled
+  // Read from the workspace domain's own store, so the notice clears itself
+  // whether the workspace arrived from this button or from the sidebar.
+  const readiness = useSyncExternalStore(workspaceReadiness.subscribe, workspaceReadiness.getSnapshot)
   // The section keeps this page mounted across tab switches (see
   // MarketSection), but the settings shell can still unmount the whole
   // section mid-read — the guard stops the late answer from touching state.
@@ -404,7 +445,25 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
     ? []
     : catalog.items.filter(item => matches(item, query.trim().toLocaleLowerCase(), category, english))
 
-  const runInstall = (item: MarketPlugin): void => {
+  const pickWorkspace = (): void => {
+    setChoosing(true)
+    setChooseError('')
+    void chooseWorkspace().then((outcome) => {
+      if (!mounted.current) return
+      setChoosing(false)
+      // A cancelled picker leaves the notice exactly as it was: the user
+      // declined, and there is nothing to report about it.
+      if (!outcome.ok && outcome.reason === 'failed') {
+        setChooseError(t('workspace.failed', { reason: outcome.message }))
+      }
+    }, (error: unknown) => {
+      if (!mounted.current) return
+      setChoosing(false)
+      setChooseError(t('workspace.failed', { reason: error instanceof Error ? error.message : String(error) }))
+    })
+  }
+
+  const runInstall = (item: MarketPlugin, viaNewWorkspace: boolean): void => {
     // The profile is what names the install command's target; until the Host
     // confirmed it, staging a prompt would write a command aimed at the
     // wrong deployment. The button is disabled in that state, and this
@@ -417,12 +476,29 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
       // The Host reduces defaultBranch to a safe pattern (falling back to
       // `main`), so the interpolated value can only be a branch name.
       branch: item.defaultBranch,
-    }))
+    }), viaNewWorkspace)
   }
 
   return (
     <div className="dsh_market_page">
       <InstalledPanel t={t} listInstalled={listInstalled} setInstalledEnabled={setInstalledEnabled} uninstallInstalled={uninstallInstalled} />
+      {/* Says the prerequisite out loud before a click runs into it, and
+          offers the same one action the cards do. It does not block browsing:
+          the shortlist is worth reading without a workspace. */}
+      {readiness === 'none' && (
+        <div className="dsh_market_notice">
+          <p className="dsh_market_noticeBody">{t('workspace.needed')}</p>
+          {chooseError !== '' && <p className="dsh_market_status" data-error="true">{chooseError}</p>}
+          <button
+            type="button"
+            className="dsh_market_primary"
+            disabled={choosing || installBusy}
+            onClick={pickWorkspace}
+          >
+            {choosing ? t('workspace.choosing') : t('workspace.choose')}
+          </button>
+        </div>
+      )}
       <div className="dsh_market_bar">
         <input
           className="dsh_market_search"
@@ -525,17 +601,36 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
                   : (
                     <div className="dsh_market_foot">
                       {card?.status === 'error' && <span className="dsh_market_cardError">{card.message}</span>}
+                      {card?.status === 'needs-workspace' && <span className="dsh_market_cardNotice">{card.message}</span>}
                       {/* The href is rebuilt from owner/name on the Host, so this
                           link cannot carry a scheme the snapshot chose. */}
                       <a className="dsh_market_link" href={item.url} target="_blank" rel="noreferrer">{t('repo')}</a>
-                      <button
-                        type="button"
-                        className="dsh_market_install"
-                        disabled={card?.status === 'busy' || installBusy || snapshot.profile === null}
-                        onClick={() => { runInstall(item) }}
-                      >
-                        {card?.status === 'busy' ? t('installing') : t('install')}
-                      </button>
+                      {/* One button, two spellings: with no workspace the click
+                          picks a folder first and then goes on installing, so
+                          the user's single "install this" still lands. */}
+                      {card?.status === 'needs-workspace' || (readiness === 'none' && card === undefined)
+                        ? (
+                          <button
+                            type="button"
+                            className="dsh_market_install"
+                            disabled={installBusy || snapshot.profile === null}
+                            onClick={() => { runInstall(item, true) }}
+                          >
+                            {t('install.pickAndInstall')}
+                          </button>
+                          )
+                        : (
+                          <button
+                            type="button"
+                            className="dsh_market_install"
+                            disabled={card?.status === 'busy' || card?.status === 'picking' || installBusy || snapshot.profile === null}
+                            onClick={() => { runInstall(item, false) }}
+                          >
+                            {card?.status === 'picking'
+                              ? t('install.picking')
+                              : card?.status === 'busy' ? t('installing') : t('install')}
+                          </button>
+                          )}
                     </div>
                     )}
               </li>
@@ -558,7 +653,8 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
 
 /** The Marketplace section. */
 export function MarketSection({
-  useScope, setEnabled, loadCatalog, listSkills, install, listInstalled, setInstalledEnabled, uninstallInstalled, close, t,
+  useScope, setEnabled, loadCatalog, listSkills, install, installIntoNewWorkspace, chooseWorkspace, workspaceReadiness,
+  listInstalled, setInstalledEnabled, uninstallInstalled, close, t,
 }: MarketSectionProps): ReactElement {
   const snapshot = useScope(value => value)
   // The slot props carry a translate function, not a locale tag; the
@@ -576,17 +672,18 @@ export function MarketSection({
   useEffect(() => () => { mounted.current = false }, [])
   // One install hand-off at a time: two cards clicked back to back must not
   // open two sessions and stage two drafts.
-  const installBusy = Object.values(cards).some(card => card.status === 'busy')
+  const installBusy = Object.values(cards).some(card => card.status === 'busy' || card.status === 'picking')
 
   const report = (fullName: string, next: CardState): void => {
     cardsRef.current = { ...cardsRef.current, [fullName]: next }
     if (mounted.current) setCards(cardsRef.current)
   }
 
-  const runInstall = (target: MarketPlugin, prompt: string): void => {
-    if (Object.values(cardsRef.current).some(card => card.status === 'busy')) return
-    report(target.fullName, { status: 'busy' })
-    void install(target, prompt).then((outcome) => {
+  const runInstall = (target: MarketPlugin, prompt: string, viaNewWorkspace: boolean): void => {
+    if (Object.values(cardsRef.current).some(card => card.status === 'busy' || card.status === 'picking')) return
+    report(target.fullName, { status: viaNewWorkspace ? 'picking' : 'busy' })
+    const handOff = viaNewWorkspace ? installIntoNewWorkspace : install
+    void handOff(target, prompt).then((outcome) => {
       if (outcome.ok) {
         report(target.fullName, { status: 'staged' })
         // The prompt is staged in a session the user cannot see from here.
@@ -594,11 +691,19 @@ export function MarketSection({
         close()
         return
       }
+      // Both of these leave the card one directory choice from installing, so
+      // the card keeps the offer up rather than turning into an error the
+      // user has to translate back into an action.
+      if (outcome.reason === 'no-workspace' || outcome.reason === 'cancelled') {
+        report(target.fullName, {
+          status: 'needs-workspace',
+          message: outcome.reason === 'cancelled' ? t('install.cancelled') : t('install.noWorkspace'),
+        })
+        return
+      }
       const message = outcome.reason === 'not-ready'
         ? t('install.notReady')
-        : outcome.reason === 'no-workspace'
-          ? t('install.noWorkspace')
-          : t('install.failed', { reason: outcome.message })
+        : t('install.failed', { reason: outcome.message })
       report(target.fullName, { status: 'error', message })
     }, (error: unknown) => {
       report(target.fullName, {
@@ -653,6 +758,8 @@ export function MarketSection({
           listInstalled={listInstalled}
           setInstalledEnabled={setInstalledEnabled}
           uninstallInstalled={uninstallInstalled}
+          chooseWorkspace={chooseWorkspace}
+          workspaceReadiness={workspaceReadiness}
           cards={cards}
           installBusy={installBusy}
           onInstall={runInstall}
