@@ -146,6 +146,16 @@ test('userBundles excludes the shipped template layers', async () => {
   }
 })
 
+test('userBundles excludes an in-box name that is not a profile dependency', () => {
+  const manifest: ProfileManifest = {
+    name: 'dsh-profile-web',
+    private: true,
+    dependencies: { 'demo-plugin': '^1.0.0' },
+    dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-safe-market', 'demo-plugin'] } },
+  }
+  assert.deepEqual(userBundles(manifest), ['demo-plugin'])
+})
+
 test('removeBundle takes the dependency and the bundles seat, nothing else', () => {
   const manifest: ProfileManifest = {
     name: 'dsh-profile-web',
@@ -301,6 +311,28 @@ test('setEnabled writes the durable rows and nudges the live entry', async () =>
     const reEnabled = await built.setEnabled('demo-plugin', true)
     assert.equal((await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8')).includes('disabled'), false)
     assert.equal(reEnabled.packages[0]!.enabled, true)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('list and uninstall ignore an in-box seat that is not a dependency', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    await makeBundle(profileDir, 'dsh-desktop-safe-market', '- insert:\n    - id: dsh-desktop-safe-market\n      name: dsh-desktop-safe-market\n')
+    const manifest = await readManifest(profileDir)
+    manifest.dsh!.profile!.bundles!.push('dsh-desktop-safe-market')
+    await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, undefined, 2) + '\n')
+    const built = makeManager(home, stubLoader([
+      { id: 'include:demo-plugin', name: 'demo-plugin', fiberState: 2 },
+      { id: 'include:dsh-desktop-safe-market', name: 'dsh-desktop-safe-market', fiberState: 2 },
+    ]).loader)
+    const result = await built.list()
+    assert.deepEqual(result.packages.map(row => row.packageName), ['demo-plugin'])
+    await assert.rejects(built.uninstall('dsh-desktop-safe-market'), /not an installed plugin package/)
+    assert.ok((await readManifest(profileDir)).dsh!.profile!.bundles!.includes('dsh-desktop-safe-market'))
+    assert.equal('dsh-desktop-safe-market' in ((await readManifest(profileDir)).dependencies ?? {}), false)
   } finally {
     await rm(home, { recursive: true, force: true })
   }

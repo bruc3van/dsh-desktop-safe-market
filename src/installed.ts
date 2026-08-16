@@ -2,7 +2,8 @@
  * The installed-plugin manager: the host half of the market's "已安装" panel.
  *
  * It answers three verbs over the plugins a user installed into this profile
- * (the shipped template layers are the deployment itself and never listed):
+ * (shipped template layers and in-box seats that are not profile
+ * dependencies are the deployment itself and never listed):
  *
  * - **list** reads the profile manifest's user bundles, joins each bundle's
  *   patch-declared entry ids against the live Loader tree, and reports the

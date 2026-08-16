@@ -4,7 +4,7 @@ English | [中文](./README.zh.md)
 
 A **review-before-install** extension marketplace for the DeepSeek Harness web GUI. It adds a **Marketplace** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
 
-- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile with their live state, each disableable/enableable and uninstallable (what shipped with DSH is not listed); below it, 200 community plugins balanced across categories. **Review and install** installs nothing: it opens a new session, stages a **security-review prompt** in the composer, and closes Settings, so an agent reads the code and only then runs the official install command.
+- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable (what shipped with DSH, and an in-box seat that is not a profile dependency, are not listed); below it, 200 community plugins balanced across categories. **Review and install** installs nothing: it opens a new session, stages a **security-review prompt** in the composer, and closes Settings, so an agent reads the code and only then runs the official install command.
 - **Skills** — what the current session can actually resolve.
 
 ![The marketplace tab](./assets/screenshots/market.png)
@@ -18,7 +18,7 @@ This plugin joins the two halves: a community shortlist that has **already had t
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.0.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.2.tar.gz
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -49,7 +49,7 @@ Whether it is sent is your Enter key. With no workspace at all, the card says so
 
 ## The installed panel
 
-The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` — version, description, the live state of each loader entry — with two actions:
+The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry. Layers shipped with the DSH profile template, and an in-box seat that is not a profile dependency (how the desktop client offers this market), are not listed. Two actions:
 
 - **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
 - **Uninstall** removes the dependency and the `dsh.profile.bundles` layer from the profile's `package.json` (the next boot simply never composes it) and stops the plugin for the rest of the session; on the next boot the plugin takes those stop rows back out of your patch file. Files left in `node_modules` become inert and are pruned by the next `dsh plugin` command.

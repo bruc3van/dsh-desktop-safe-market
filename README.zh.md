@@ -4,7 +4,7 @@
 
 给 DeepSeek Harness Web UI 加一个**先审查、再安装**的扩展市场：在设置里多一个**插件市场**导航项（挂市场自己的店面图标），分两页——
 
-- **插件**：上方是**已安装面板**——列出当前 profile 通过包安装的插件及其运行状态，支持停用/启用和卸载（DSH 自带的不在此列）；下方是社区市场。点「安全安装」不会替你装任何东西，而是打开一个新会话、把一段**安全审查提示词**填进输入框并关掉设置窗口，由你按回车让 Agent 先读代码、确认干净后再用官方命令安装。
+- **插件**：上方是**已安装面板**——列出当前 profile 通过包安装的插件及其运行状态，支持停用/启用和卸载（DSH 自带的、以及未写成 profile 依赖的 in-box 接入不在此列）；下方是社区市场。点「安全安装」不会替你装任何东西，而是打开一个新会话、把一段**安全审查提示词**填进输入框并关掉设置窗口，由你按回车让 Agent 先读代码、确认干净后再用官方命令安装。
 - **技能**：列出当前会话实际能解析到的技能。
 
 ![插件市场](./assets/screenshots/market.png)
@@ -18,7 +18,7 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.0.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.2.tar.gz
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -49,7 +49,7 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 
 ## 已安装面板
 
-「插件」页顶部的**已安装面板**列出当前 profile 通过 `dsh plugin add` 装进来的插件包（版本、简介、每个 loader 条目的运行状态），并提供两个动作：
+「插件」页顶部的**已安装面板**列出当前 profile 通过 `dsh plugin add` 装进来的插件包（同时写在 `dependencies` 与 `dsh.profile.bundles` 里的那些：版本、简介、每个 loader 条目的运行状态）。DSH 模板自带的层、以及桌面端按 in-box 接入、没有写成依赖的市场，都不在此列。提供两个动作：
 
 - **停用/启用**：往 profile 自己的 `cordis.patch.yml`（用户补丁层）写入/移除一行 `- id: <条目> / disabled: true`，同时直接推动 loader 条目——**立即生效，无需重启**，重启后依旧有效。market 自己那行不提供停用按钮：停用市场会连带停掉唯一能再启用它的界面。
 - **卸载**：从 profile 的 `package.json` 里移除依赖与 `dsh.profile.bundles` 层（下次启动不再组装它），并在本会话内先停用；重启后由插件自动收回那几行停用标记。留在 `node_modules` 里的文件会失效，下次任何 `dsh plugin` 命令会顺带清掉。

@@ -5,10 +5,15 @@ export declare const PROFILES_DIR = "profiles";
 /** The user patch layer inside a profile directory. */
 export declare const PROFILE_PATCH_FILENAME = "cordis.patch.yml";
 /**
- * Bundle layers every shipped profile template carries. Anything else in
- * `dsh.profile.bundles` arrived by user install (`dsh plugin add`), which is
- * the set the manager lists and may edit; the shipped layers are the
- * deployment itself and stay out of it.
+ * Bundle layers every shipped profile template carries. The manager never
+ * lists these: they are the deployment itself.
+ *
+ * A name in `dsh.profile.bundles` is not enough to treat a plugin as
+ * user-installed. Official `dsh plugin` never touches a name that is not a
+ * profile dependency, and the desktop client seats its in-box market the
+ * same way — a bundle entry plus a symlink, no dependency. Those seats stay
+ * out of the panel: listing them would offer an uninstall the next bundled
+ * boot silently puts back.
  */
 export declare const SHIPPED_BUNDLES: ReadonlySet<string>;
 /** Resolve the harness home: `$DSH_HOME`, then `~/.dsh`. */
@@ -50,7 +55,11 @@ export type ProfileManifest = Record<string, unknown> & {
 export declare function readManifest(profileDir: string): Promise<ProfileManifest>;
 /** Write the manifest back (2-space JSON, trailing newline, atomic). */
 export declare function writeManifest(profileDir: string, manifest: ProfileManifest): Promise<void>;
-/** The bundles a user installed (the shipped template layers excluded). */
+/**
+ * The bundles a user installed (`dsh plugin add`): names that sit in
+ * `dsh.profile.bundles` and in `dependencies`. Shipped template layers and
+ * in-box seats (a bundle name with no dependency) are not in this set.
+ */
 export declare function userBundles(manifest: ProfileManifest): string[];
 /**
  * Remove one bundle from the manifest: its dependency entry and its

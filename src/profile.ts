@@ -34,10 +34,15 @@ export const PROFILES_DIR = 'profiles'
 export const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
 
 /**
- * Bundle layers every shipped profile template carries. Anything else in
- * `dsh.profile.bundles` arrived by user install (`dsh plugin add`), which is
- * the set the manager lists and may edit; the shipped layers are the
- * deployment itself and stay out of it.
+ * Bundle layers every shipped profile template carries. The manager never
+ * lists these: they are the deployment itself.
+ *
+ * A name in `dsh.profile.bundles` is not enough to treat a plugin as
+ * user-installed. Official `dsh plugin` never touches a name that is not a
+ * profile dependency, and the desktop client seats its in-box market the
+ * same way — a bundle entry plus a symlink, no dependency. Those seats stay
+ * out of the panel: listing them would offer an uninstall the next bundled
+ * boot silently puts back.
  */
 export const SHIPPED_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-base',
@@ -141,11 +146,17 @@ export async function writeManifest(profileDir: string, manifest: ProfileManifes
   await atomicWrite(join(profileDir, 'package.json'), JSON.stringify(manifest, undefined, 2) + '\n')
 }
 
-/** The bundles a user installed (the shipped template layers excluded). */
+/**
+ * The bundles a user installed (`dsh plugin add`): names that sit in
+ * `dsh.profile.bundles` and in `dependencies`. Shipped template layers and
+ * in-box seats (a bundle name with no dependency) are not in this set.
+ */
 export function userBundles(manifest: ProfileManifest): string[] {
   const bundles = manifest.dsh?.profile?.bundles
   if (!Array.isArray(bundles)) return []
-  return bundles.filter(name => typeof name === 'string' && !SHIPPED_BUNDLES.has(name))
+  const dependencies = manifest.dependencies ?? {}
+  return bundles.filter(name =>
+    typeof name === 'string' && !SHIPPED_BUNDLES.has(name) && Object.hasOwn(dependencies, name))
 }
 
 /**
