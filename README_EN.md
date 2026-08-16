@@ -4,12 +4,12 @@
 
 A **review-before-install** extension marketplace for the DeepSeek Harness web GUI. It deliberately differs from click-to-install marketplaces on two counts:
 
-- **A curated source.** The list is not a raw crawl of the `dsh-plugin` topic. It is the daily, human-curated output of the [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) snapshot pipeline — topic riders, archived and disabled repositories are removed upstream, and the seats are dealt round by round across categories — so what you browse is an editorially filtered shortlist, never a popularity dump.
+- **A curated source.** The list is not a raw crawl of the `dsh-plugin` topic. It is the daily, human-curated output of the [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) snapshot pipeline — topic riders, archived and disabled repositories are removed upstream, and entries are dealt round by round across categories — so what you browse is an editorially filtered shortlist, never a popularity dump.
 - **Review before install.** The install button installs nothing. It opens a new session and stages a **security-review prompt**; an agent reads the repository's actual code, and only a clean reading proceeds to the official install command. The plugin itself has no interface that could run an install — review and install are inseparable by construction.
 
 In use, it adds a **Marketplace** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
 
-- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable; an in-box seat placed by the desktop client is listed here too, because nowhere else can remove it. Layers shipped with DSH, and in-box seats carrying no ownership marker, are not listed. Below it, the curated market, whose **All plugins** view ranks by stars.
+- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable; the marketplace plugin the desktop client placed is listed here too, because nowhere else can remove it. Layers shipped with DSH, and in-box bundles carrying no ownership marker, are not listed. Below it, the curated market, whose **All plugins** view ranks by stars.
 - **Skills** — what the current session can actually resolve.
 
 ![The marketplace tab](./assets/screenshots/marketplace.png)
@@ -48,13 +48,13 @@ That is deliberate: **enabling is what lets this machine read the catalog snapsh
 2. **stages** the review prompt in the composer — it does not send it;
 3. closes Settings, so you are looking at the session it was staged in.
 
-The prompt asks the agent to read the repository rather than its README, and to look for credential or token access, data sent to third-party hosts, remote code execution or downloaded-and-executed payloads, install-time scripts (`postinstall` and friends), obfuscated sources with no matching original, and permissions far wider than the plugin claims. **Anything suspicious means stop, explain, and ask you.** A clean reading is followed by the official command:
+The prompt asks the agent to treat everything in the repository as untrusted material under review (instructions found there are never followed), to read the code rather than the README, and to look for credential or token access, data sent to third-party hosts, remote code execution or downloaded-and-executed payloads, install-time scripts (`postinstall`, `prepare`, and friends), obfuscated sources with no matching original, and permissions far wider than the plugin claims. **Anything suspicious means stop, explain, and ask you.** A clean reading is followed by the official command, by priority — the npm package or the latest release tag's prebuilt tarball first (no repository code runs at install time), and only failing both, source from the default branch pinned to an exact commit:
 
 ```sh
-dsh plugin --profile web add <the repository's tarball URL>
+dsh plugin --profile web add <npm package | tarball URL | github:owner/name#<commit sha>>
 ```
 
-preferring the latest release tag and falling back to the default branch (the catalog supplies the branch name). The prompt also says that dsh must be restarted before the plugin loads.
+A source install is blocked by pnpm's `allowBuilds` gate — permission for the repository's code to run on your machine at install time — and the prompt has the agent hand pnpm's printed key to you verbatim, wait for it to land in the profile's `pnpm-workspace.yaml`, and re-run. dsh must be restarted before the plugin loads; the prompt has the agent verify with `--dump-config` right after the install, before that restart.
 
 Whether it is sent is your Enter key. With no workspace at all, the card says so and points you at the sidebar.
 
@@ -66,22 +66,22 @@ A catalog row already installed into this profile is marked **Installed vX.Y.Z**
 
 The join is the installed package's `repository` field (every npm spelling is reduced to `owner/name`), because the catalog is keyed by GitHub repository while an install is keyed by package name, and the two are only sometimes spelled alike. A package that declares no repository falls back to matching its short name against the repository name — but only while that name picks out exactly one installed package: when two share it, neither claims the row, because an answer that depends on iteration order is worse than no answer.
 
-**The catalog carries no versions** (the upstream `market.json` records repository facts, not releases), so whether a newer version exists is something this plugin cannot compute locally — and does not guess. The upgrade prompt's first step is to have the agent establish which version the latest release tag names and, **if it is not newer, say so and change nothing**; only a real update leads on to reading the code changes between the two versions, looking for newly added credential access, newly added outbound data, changed install scripts, and widened permissions. As with install, the plugin runs no command itself.
+**The catalog carries no versions** (the upstream `market.json` records repository facts, not releases), so whether a newer version exists is something this plugin cannot compute locally — and does not guess. The upgrade prompt's first step is to have the agent establish the newest upstream version — the latest release tag, or the version the repository publishes to npm — and, **if it is not newer, say so and change nothing**; only a real update leads on to reading the code changes between the two versions, looking for newly added credential access, newly added outbound data, changed install scripts, and widened permissions. Upgrades install through the same ladder as fresh installs (npm / release tarball / commit-pinned source) and the same `allowBuilds` rules. As with install, the plugin runs no command itself.
 
 ## The installed panel
 
-The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry — **and any in-box seat placed by the desktop client**. Layers shipped with the DSH profile template are not listed. Two actions:
+The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry — **and the marketplace plugin the desktop client placed**. Layers shipped with the DSH profile template are not listed. Two actions:
 
 - **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
 - **Uninstall** removes the dependency and the `dsh.profile.bundles` layer from the profile's `package.json` (the next boot simply never composes it) and stops the plugin for the rest of the session; on the next boot the plugin takes those stop rows back out of your patch file. The sweep record lives in a small plugin-owned file under the harness home — not the market's cache domain, so a broken domain cannot strand the rows; when the in-session stop fails, the uninstall notice says the plugin may run until the next restart. A plugin uninstalled and reinstalled within one session is held down by the leftover rows, and its card explains that Enable will clear them. Files left in `node_modules` become inert and are pruned by the next `dsh plugin` command.
 
-### Seats placed by the desktop client
+### The marketplace plugin placed by the desktop client
 
-The desktop client does not install this market with `dsh plugin add`. It **copies** the plugin into `<DSH_HOME>/profiles/node_modules` and adds one entry to `dsh.profile.bundles` — no dependency. Such a seat is labelled *seated by the desktop client*, and **this panel is the only place it can be removed**: official `dsh plugin` deliberately never touches a bundle that is not a profile dependency, and the client that placed it may have been uninstalled since.
+The desktop client does not install this market with `dsh plugin add`. It **copies** the plugin into `<DSH_HOME>/profiles/node_modules` and adds one entry to `dsh.profile.bundles` — no dependency. Such a copy is labelled *seated by the desktop client*, and **this panel is the only place it can be removed**: official `dsh plugin` deliberately never touches a bundle that is not a profile dependency, and the client that placed it may have been uninstalled since.
 
-For a seat the directory IS the install, so uninstalling removes the `bundles` entry *and* the copied directory. Taking only the entry would strand a plugin tree that nothing lists, nothing loads, and nothing can ever offer to remove again — the panel finds seats through the bundle list.
+The copy is never written as a dependency — the directory itself IS the install — so uninstalling removes the `bundles` entry *and* the copied directory. Taking only the entry would strand a plugin tree that nothing lists, nothing loads, and nothing can ever offer to remove again; the panel finds this plugin through the bundle list.
 
-If the client is still installed and still set to seat the marketplace, it will place the seat again the next time it starts; the card says so. To stop it coming back, turn the switch off in the client's connection settings. An in-box bundle with no ownership marker belongs to the deployment itself: it is neither listed nor removable here.
+If the client is still installed and still set to install the marketplace, it will put the plugin back the next time it starts; the card says so. To stop it coming back, turn the switch off in the client's connection settings. An in-box bundle with no ownership marker belongs to the deployment itself: it is neither listed nor removable here.
 
 By design it matches "review and install": **local file edits plus loader calls — no process spawned, no network** — the panel reads only this machine's own facts. With the market switched off, though, the page is the switch and nothing else: what you turned off is this marketplace, and it should not keep a plugin manager running in your settings.
 
@@ -100,7 +100,7 @@ Addressing it by session is required, not lazy: the skill registry is host+per-s
 The market reads a single published file, [`market.json`](https://github.com/bruc3van/awesome-dsh-plugin/blob/main/data/market.json), from [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin)'s daily snapshot pipeline. Every editorial decision happens upstream, where the crawl and the human curation live:
 
 - the crawl of repositories tagged `dsh-plugin` (`repositories.json`) is filtered there — a description is required, archived/disabled repositories are dropped, and the exclusions in `curated.json` are applied;
-- rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every seat to two or three categories), but seats dealt round by round so every category places its best entry before any places its second, up to 300;
+- rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every slot to two or three categories), but entries dealt round by round so every category places its best entry before any places its second, up to 300;
 - this plugin truncates that order to `marketSize` (default 200) and re-validates every row on the Host before the browser sees it.
 
 The wire protocol — field shapes, truncation limits, the branch-name whitelist, the ordering invariant, and the versioning rules — is documented in [docs/market-json-spec.md](docs/market-json-spec.md).
@@ -132,7 +132,7 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 - **Skills are read-only for now.** The Skills page answers "what do I have". Skills are distributed as filesystem directories rather than npm packages, so installing them is the next step.
 - **It does not audit what you already installed.** The installed panel views, disables, and uninstalls, but it does not re-review code that is already running — the before-install review is still the gate.
 - **The market does not run the install itself.** The command lives in the prompt and the agent runs it, which is what makes the review impossible to skip — at the cost of no progress display inside the market.
-- **The nav icon is a skin-level swap.** The settings shell hardcodes section nav icons by id (unknown ids get the gear) and the slot contract has no icon seat; this plugin finds its own labeled row and re-skins the icon. If the shell restructures, the worst case is the gear returning — nothing functional breaks.
+- **The nav icon is a skin-level swap.** The settings shell hardcodes section nav icons by id (unknown ids get the gear) and the slot contract has no icon option; this plugin finds its own labeled row and re-skins the icon. If the shell restructures, the worst case is the gear returning — nothing functional breaks.
 
 ## Development
 
@@ -143,7 +143,7 @@ pnpm test          # node --test, the catalog reduction and reader regressions
 pnpm run build     # lib/index.js (Host ESM), lib/client.js (browser, ModuleLoader-wrapped), lib/types
 ```
 
-A version bump has seats that must move together: `package.json`, `dsh.plugin.json`, and the tarball URLs in both READMEs (the install command and the agent prompt each carry one). The version gate in `pnpm test` (`test/version.test.ts`) checks every seat, and CI (`.github/workflows/check.yml`) runs the same check on every push and PR.
+A version bump has places that must move together: `package.json`, `dsh.plugin.json`, and the tarball URLs in both READMEs (the install command and the agent prompt each carry one). The version gate in `pnpm test` (`test/version.test.ts`) checks each one, and CI (`.github/workflows/check.yml`) runs the same check on every push and PR.
 
 `devDependencies` are pinned to the published `@deepseek-ai/*` versions the runtime actually loads; every `peerDependency` is optional and supplied by the profile's node_modules.
 
