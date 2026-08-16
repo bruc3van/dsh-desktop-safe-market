@@ -30,6 +30,10 @@ jobs:
           node-version: 24
           cache: pnpm
       - name: Install dependencies
-        run: pnpm install --ignore-workspace
+        run: pnpm install
+        # No --ignore-workspace: pnpm 11 reads build-script approvals
+        # (allowBuilds in pnpm-workspace.yaml) only through the workspace
+        # file; skipping it leaves esbuild's postinstall unapproved and
+        # fails with ERR_PNPM_IGNORED_BUILDS.
       - name: Typecheck, test, build
         run: pnpm run check
