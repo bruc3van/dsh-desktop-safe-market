@@ -12,7 +12,7 @@
 - **插件**：上方是**已安装面板**——列出当前 profile 通过包安装的插件及其运行状态，支持停用/启用和卸载（DSH 自带的、以及未写成 profile 依赖的 in-box 接入不在此列）；下方是精选市场，「全部插件」视图按 Star 数排名。
 - **技能**：列出当前会话实际能解析到的技能。
 
-![插件市场](./assets/screenshots/market.png)
+![插件市场](./assets/screenshots/marketplace.png)
 
 ## 它解决什么问题
 
@@ -23,13 +23,13 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.3.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.4.tar.gz
 ```
 
 也可以把安装这件事直接交给你的 Agent——复制这句提示词发过去即可：
 
 ```text
-帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.3.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
+帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.4.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -58,6 +58,16 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 
 发不发送由你按回车决定。没有任何工作区时，卡片会直接告诉你先去侧边栏选一个。
 
+![安全安装](./assets/screenshots/marketplace-sec-install.png)
+
+### 已经装过的：安全升级
+
+目录里已经装在本 profile 的插件，卡片右上角标出「已安装 vX.Y.Z」，按钮也从「安全安装」变成**「安全升级」**——省得对着一个装好的插件反复点安装。
+
+认亲靠的是已安装包 `package.json` 里的 `repository` 字段（各种写法都会归约成 `owner/name`），因为目录是按 GitHub 仓库编排的，而安装是按包名编排的，两者只是有时拼写相同。没写 `repository` 的包退回「包短名 ≈ 仓库名」的猜测，且仅在该短名只对应一个已装包时才算数——两个包重名时宁可都不标，也不能让结论取决于遍历顺序。
+
+**目录里没有版本号**（上游 `market.json` 只收录仓库事实，不收录发布版本），所以「有没有新版」这件事插件本地算不出来，也不去猜：升级提示词的第一步就是让 Agent 去确认上游最新 release tag 对应哪个版本，**不比当前新就直接回「已是最新」、不做任何改动**；确有新版才继续读两版之间的代码改动，重点看新增的凭据访问、新增的对外发送、安装脚本变化和权限是否变宽。和安装一样，插件自己不执行任何命令。
+
 ## 已安装面板
 
 「插件」页顶部的**已安装面板**列出当前 profile 通过 `dsh plugin add` 装进来的插件包（同时写在 `dependencies` 与 `dsh.profile.bundles` 里的那些：版本、简介、每个 loader 条目的运行状态）。DSH 模板自带的层、以及桌面端按 in-box 接入、没有写成依赖的市场，都不在此列。提供两个动作：
@@ -65,7 +75,9 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 - **停用/启用**：往 profile 自己的 `cordis.patch.yml`（用户补丁层）写入/移除一行 `- id: <条目> / disabled: true`，同时直接推动 loader 条目——**立即生效，无需重启**，重启后依旧有效。market 自己那行不提供停用按钮：停用市场会连带停掉唯一能再启用它的界面。
 - **卸载**：从 profile 的 `package.json` 里移除依赖与 `dsh.profile.bundles` 层（下次启动不再组装它），并在本会话内先停用；重启后由插件自动收回那几行停用标记。收尾记录存放在 harness home 里插件自己的小文件（不依赖市场缓存域，域坏了记录也丢不了）；若本会话内的停用步骤失败，卸载提示会明说「可能运行到下次重启」。同一会话内重装刚卸载的插件会被残留停用行按住，卡片会提示「点启用即可恢复」。留在 `node_modules` 里的文件会失效，下次任何 `dsh plugin` 命令会顺带清掉。
 
-设计上与「安全安装」一致：**本地文件编辑 + loader 调用，不启动进程、不联网**；面板读的也是本机事实，所以市场开关关着它也照常工作。
+设计上与「安全安装」一致：**本地文件编辑 + loader 调用，不启动进程、不联网**——面板读的全是本机事实。不过市场关掉时这一页只剩开关本身：你关掉的是这个市场，它不该继续在你的设置里开着一个插件管理器。
+
+![已安装面板](./assets/screenshots/marketplace-installed.png)
 
 ## 技能页
 
@@ -73,7 +85,7 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 
 按会话寻址不是偷懒，是必须：技能注册表是「宿主 + 每作用域」分层的，而 web 部署**特意禁用了宿主平面的 `skill-filesystem`**——本地发现归各个 Agent 预设所有。从插件根上下文读只能看到全局层，会对着一堆技能报告「没有技能」。没有打开的会话时，页面直说没有可读的那一层。
 
-![技能页](./assets/screenshots/skills.png)
+![技能页](./assets/screenshots/marketplace-skills.png)
 
 ## 数据来源
 

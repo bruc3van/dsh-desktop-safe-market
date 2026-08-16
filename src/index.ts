@@ -9,6 +9,7 @@
  * reviewed shortlist in front of the user and hand a security-review prompt —
  * naming the official install command — to a session the user then confirms.
  */
+import { createRequire } from 'node:module'
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 // Type-only: brings the `ctx.typert` Context merge into this program.
@@ -52,6 +53,26 @@ export type {
 
 /** The published community catalog this market reads. */
 const DEFAULT_CATALOG_BASE = 'https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data'
+
+/**
+ * This package's own version, for the section header.
+ *
+ * Read from the manifest rather than baked in by the build, so there is no
+ * third seat to drift (the build gate already pins package.json against
+ * `dsh.plugin.json`). `../package.json` resolves to the package root from
+ * both the bundle at `lib/index.js` and the source at `src/index.ts`, so the
+ * value is the same under the Loader and under a source run. A market that
+ * cannot read its own manifest still runs — the header just omits the version.
+ */
+function readSelfVersion(): string {
+  try {
+    const manifest = createRequire(import.meta.url)('../package.json') as { version?: unknown }
+    return typeof manifest.version === 'string' ? manifest.version : ''
+  } catch (error) {
+    console.warn('[dsh-desktop-safe-market] could not read own version:', error)
+    return ''
+  }
+}
 
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
@@ -191,7 +212,7 @@ export function apply(ctx: Context, config?: Config): void {
     readSettings,
     writeSettings,
     (agent, signal) => readSkills(ctx, agent, signal),
-    { profile: resolved.profile },
+    { profile: resolved.profile, version: readSelfVersion() },
     installed,
   )
 

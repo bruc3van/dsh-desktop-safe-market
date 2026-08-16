@@ -240,6 +240,7 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
           packageName,
           version: info.version,
           description: info.description,
+          repository: info.repository,
           self,
           enabled: entries.some(entry => entry.enabled),
           entries,
@@ -250,7 +251,7 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
         // A bundle whose package vanished from node_modules is still an
         // install fact: list it, say why it cannot be read, and let the user
         // uninstall the residue.
-        packages.push({ packageName, version: '', description: '', self, enabled: false, entries: [], error: messageOf(error), heldDown: heldDown(packageName) })
+        packages.push({ packageName, version: '', description: '', repository: '', self, enabled: false, entries: [], error: messageOf(error), heldDown: heldDown(packageName) })
       }
     }
     return { packages, profile: options.profile, error: '' }
@@ -286,7 +287,7 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     const { manifest, bundles } = await readUserBundles()
     assertInstalled(bundles, packageName)
     const self = packageName === options.selfName
-    const info = await readBundleInfo(profileDir, packageName).catch(() => ({ version: '', description: '', entries: [] as { id: string; name: string }[] }))
+    const info = await readBundleInfo(profileDir, packageName).catch(() => ({ version: '', description: '', repository: '', entries: [] as { id: string; name: string }[] }))
     const ids = info.entries.map(entry => entry.id)
     if (!removeBundle(manifest, packageName)) {
       throw new Error(`${packageName} is listed as a bundle but nothing removable was found`)

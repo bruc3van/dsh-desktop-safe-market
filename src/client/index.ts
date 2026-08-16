@@ -105,7 +105,7 @@ export function apply(ctx: ClientContext): void {
   // gear); re-skin this section's row with the market's own storefront.
   ctx.effect(() => adoptNavIcon(), 'dsh-desktop-safe-market: nav icon')
 
-  const scope = createSnapshotStore({ value: defaultSettings(), profile: null as string | null })
+  const scope = createSnapshotStore({ value: defaultSettings(), profile: null as string | null, version: '' })
   let settingsGeneration = 0
 
   const reportError = (operation: string, error: unknown): void => {
@@ -149,7 +149,7 @@ export function apply(ctx: ClientContext): void {
         reportError('describe', result.error)
         return
       }
-      scope.set({ ...scope.getSnapshot(), profile: result.value.profile })
+      scope.set({ ...scope.getSnapshot(), profile: result.value.profile, version: result.value.version })
     } catch (error) {
       if (market === remote) reportError('describe', error)
     }

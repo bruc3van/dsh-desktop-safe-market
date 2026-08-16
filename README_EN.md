@@ -12,7 +12,7 @@ In use, it adds a **Marketplace** entry to the Settings navigation (wearing the 
 - **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable (what shipped with DSH, and an in-box seat that is not a profile dependency, are not listed); below it, the curated market, whose **All plugins** view ranks by stars.
 - **Skills** — what the current session can actually resolve.
 
-![The marketplace tab](./assets/screenshots/market.png)
+![The marketplace tab](./assets/screenshots/marketplace.png)
 
 ## What it is for
 
@@ -23,13 +23,13 @@ This plugin joins the two halves: a community shortlist that has **already had t
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.3.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.4.tar.gz
 ```
 
 Or hand the install to your agent — copy this one-line prompt:
 
 ```text
-Install the DSH plugin market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.3.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
+Install the DSH plugin market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.4.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -58,6 +58,16 @@ preferring the latest release tag and falling back to the default branch (the ca
 
 Whether it is sent is your Enter key. With no workspace at all, the card says so and points you at the sidebar.
 
+![Review and install](./assets/screenshots/marketplace-sec-install.png)
+
+### Already installed: review and upgrade
+
+A catalog row already installed into this profile is marked **Installed vX.Y.Z** in its card, and its button reads **Review and upgrade** instead of Review and install — so you are not offered an install for something you already have.
+
+The join is the installed package's `repository` field (every npm spelling is reduced to `owner/name`), because the catalog is keyed by GitHub repository while an install is keyed by package name, and the two are only sometimes spelled alike. A package that declares no repository falls back to matching its short name against the repository name — but only while that name picks out exactly one installed package: when two share it, neither claims the row, because an answer that depends on iteration order is worse than no answer.
+
+**The catalog carries no versions** (the upstream `market.json` records repository facts, not releases), so whether a newer version exists is something this plugin cannot compute locally — and does not guess. The upgrade prompt's first step is to have the agent establish which version the latest release tag names and, **if it is not newer, say so and change nothing**; only a real update leads on to reading the code changes between the two versions, looking for newly added credential access, newly added outbound data, changed install scripts, and widened permissions. As with install, the plugin runs no command itself.
+
 ## The installed panel
 
 The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry. Layers shipped with the DSH profile template, and an in-box seat that is not a profile dependency (how the desktop client offers this market), are not listed. Two actions:
@@ -65,7 +75,9 @@ The **installed panel** at the top of the Plugins page lists the packages this p
 - **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
 - **Uninstall** removes the dependency and the `dsh.profile.bundles` layer from the profile's `package.json` (the next boot simply never composes it) and stops the plugin for the rest of the session; on the next boot the plugin takes those stop rows back out of your patch file. The sweep record lives in a small plugin-owned file under the harness home — not the market's cache domain, so a broken domain cannot strand the rows; when the in-session stop fails, the uninstall notice says the plugin may run until the next restart. A plugin uninstalled and reinstalled within one session is held down by the leftover rows, and its card explains that Enable will clear them. Files left in `node_modules` become inert and are pruned by the next `dsh plugin` command.
 
-By design it matches "review and install": **local file edits plus loader calls — no process spawned, no network**, and the panel reads only this machine's own facts, so it works with the market off.
+By design it matches "review and install": **local file edits plus loader calls — no process spawned, no network** — the panel reads only this machine's own facts. With the market switched off, though, the page is the switch and nothing else: what you turned off is this marketplace, and it should not keep a plugin manager running in your settings.
+
+![The installed panel](./assets/screenshots/marketplace-installed.png)
 
 ## The Skills page
 
@@ -73,7 +85,7 @@ Lists the skills the **current session** resolves — name, description, owning 
 
 Addressing it by session is required, not lazy: the skill registry is host+per-scope layered, and the web deployment **deliberately disables the host-plane `skill-filesystem` row** — local discovery belongs to each agent preset. A read from the plugin's root context sees the global layer alone and would report "no skills" to a user with plenty. With no session open, the page says there is no layer to read.
 
-![The Skills page](./assets/screenshots/skills.png)
+![The Skills page](./assets/screenshots/marketplace-skills.png)
 
 ## Where the data comes from
 

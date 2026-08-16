@@ -29,6 +29,19 @@ export declare const REPOSITORY_SLUG_PATTERN: RegExp;
  * not end in `/` or `.`.
  */
 export declare const BRANCH_PATTERN: RegExp;
+/**
+ * The only version shape the upgrade prompt may interpolate.
+ *
+ * An installed package's `version` is read from a manifest on this machine,
+ * but it is still text this plugin did not write: the package that authored
+ * it is exactly the one the upgrade prompt is about. Anything with a space in
+ * it could carry a sentence into an instruction the user is one keystroke
+ * from sending, so the prompt names the version only when it looks like one
+ * (and says "the installed version" otherwise).
+ */
+export declare const VERSION_PATTERN: RegExp;
+/** Whether a version string is safe to interpolate into the prompt. */
+export declare function isSafeVersion(value: string): boolean;
 /** Whether a trimmed branch name is safe to interpolate into the prompt. */
 export declare function isSafeBranchName(value: string): boolean;
 /** One row of the market: a community plugin the catalog kept. */
@@ -106,6 +119,16 @@ export interface MarketSkillsResult {
 export interface MarketEnvironment {
     /** The profile whose plugins an install would change. */
     readonly profile: string;
+    /**
+     * The market's own version, for the section header.
+     *
+     * The installed panel would show it as an ordinary row — but only for a
+     * copy installed as a profile DEPENDENCY. A deployment that seats the
+     * market as an in-box bundle (which is how the desktop client ships it)
+     * has no such row by design, and would otherwise never state which market
+     * it is running. '' when the manifest could not be read.
+     */
+    readonly version: string;
 }
 /** The `safe-market` settings namespace's durable shape. */
 export interface SafeMarketSettings {
@@ -144,6 +167,16 @@ export interface MarketInstalledPackage {
     readonly packageName: string;
     readonly version: string;
     readonly description: string;
+    /**
+     * The `owner/name` this package's manifest points its `repository` field
+     * at, when that field names a GitHub repository in a shape matching
+     * {@link REPOSITORY_SLUG_PATTERN}; '' otherwise.
+     *
+     * This is what joins an installed package to a catalog row: the catalog is
+     * keyed by repository (it is a crawl of GitHub) while an install is keyed by
+     * package name, and the two are only sometimes spelled alike.
+     */
+    readonly repository: string;
     /** The market's own row: listed, but the panel must not disable it. */
     readonly self: boolean;
     /** Package-level enablement: at least one of its entries is enabled. */
@@ -288,6 +321,7 @@ export declare const marketSkillsResultSchema: z.ZodReadonly<z.ZodObject<{
 /** Strict wire codec for the deployment facts the browser needs. */
 export declare const marketEnvironmentSchema: z.ZodReadonly<z.ZodObject<{
     profile: z.ZodString;
+    version: z.ZodString;
 }, z.core.$strip>>;
 /** Strict wire codec for the resolved settings section. */
 export declare const safeMarketSettingsSchema: z.ZodReadonly<z.ZodObject<{
@@ -320,6 +354,7 @@ export declare const marketInstalledPackageSchema: z.ZodReadonly<z.ZodObject<{
     packageName: z.ZodString;
     version: z.ZodString;
     description: z.ZodString;
+    repository: z.ZodUnion<readonly [z.ZodString, z.ZodLiteral<"">]>;
     self: z.ZodBoolean;
     enabled: z.ZodBoolean;
     entries: z.ZodReadonly<z.ZodArray<z.ZodReadonly<z.ZodObject<{
@@ -345,6 +380,7 @@ export declare const marketInstalledResultSchema: z.ZodReadonly<z.ZodObject<{
         packageName: z.ZodString;
         version: z.ZodString;
         description: z.ZodString;
+        repository: z.ZodUnion<readonly [z.ZodString, z.ZodLiteral<"">]>;
         self: z.ZodBoolean;
         enabled: z.ZodBoolean;
         entries: z.ZodReadonly<z.ZodArray<z.ZodReadonly<z.ZodObject<{

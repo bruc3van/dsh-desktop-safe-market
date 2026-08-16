@@ -23,6 +23,7 @@ import { readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { isMap, isScalar, isSeq, parse, parseDocument, type ScalarTag } from 'yaml'
+import { REPOSITORY_SLUG_PATTERN } from './contract.ts'
 
 /** Environment variable overriding the default harness home. */
 export const DSH_HOME_ENV = 'DSH_HOME'
@@ -241,7 +242,55 @@ export function packageDirFromProfile(profileDir: string, packageName: string): 
 export interface BundleInfo {
   version: string
   description: string
+  /** `owner/name` when the manifest points at a GitHub repository; '' otherwise. */
+  repository: string
   entries: { id: string; name: string }[]
+}
+
+/**
+ * The GitHub `owner/name` a package manifest's `repository` field names.
+ *
+ * npm allows the field in several spellings — the object form, the shorthand
+ * string (`owner/name`, `github:owner/name`), and a git URL in any of the
+ * scheme flavours — and every one of them may also point somewhere that is
+ * not GitHub at all. This reduces the ones that do to a bare slug and answers
+ * '' for everything else, including a `directory` sub-path (a monorepo entry
+ * whose repository is shared with other packages, so the slug would join the
+ * wrong catalog row).
+ * @param manifest - the parsed package manifest.
+ * @returns the `owner/name` slug, or '' when the field names no GitHub repository.
+ */
+export function repositorySlugOf(manifest: unknown): string {
+  const field = (manifest as { repository?: unknown } | null)?.repository
+  let url: string
+  if (typeof field === 'string') {
+    url = field
+  } else if (field !== null && typeof field === 'object') {
+    const record = field as { url?: unknown; directory?: unknown }
+    // A `directory` means several packages share one repository; the slug
+    // cannot identify this one.
+    if (typeof record.directory === 'string' && record.directory !== '') return ''
+    if (typeof record.url !== 'string') return ''
+    url = record.url
+  } else {
+    return ''
+  }
+  const trimmed = url.trim()
+  // The shorthand forms: a bare `owner/name`, optionally with the `github:`
+  // host prefix npm treats as the default.
+  const shorthand = trimmed.startsWith('github:') ? trimmed.slice('github:'.length) : trimmed
+  if (REPOSITORY_SLUG_PATTERN.test(shorthand)) return shorthand
+  // The URL forms: git+https://, https://, git://, ssh://git@ and the scp-like
+  // git@github.com:owner/name — all reduced by their host and path.
+  const match = /^(?:git\+)?(?:https?|git|ssh):\/\/(?:[^@/]*@)?github\.com\/(.+)$/.exec(trimmed)
+    ?? /^(?:git\+ssh:\/\/)?git@github\.com:(.+)$/.exec(trimmed)
+  if (match === null) return ''
+  // Trailing slashes come off FIRST: `owner/name.git/` is a real spelling,
+  // and stripping the suffix before the slash leaves `.git` attached — which
+  // the slug pattern accepts (it allows dots), so the wrong slug would travel
+  // on and silently join nothing.
+  const path = match[1]!.replace(/\/+$/, '').replace(/\.git$/, '')
+  return REPOSITORY_SLUG_PATTERN.test(path) ? path : ''
 }
 
 /** Read one installed bundle: its manifest display facts and its patch's entry rows. */
@@ -259,6 +308,7 @@ export async function readBundleInfo(profileDir: string, packageName: string): P
   return {
     version: typeof (manifest as { version?: unknown }).version === 'string' ? (manifest as { version: string }).version : '',
     description: typeof manifest.description === 'string' ? manifest.description : '',
+    repository: repositorySlugOf(manifest),
     entries,
   }
 }

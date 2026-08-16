@@ -23,8 +23,23 @@ export const pendingUninstallState = z.object({
 export const safeMarketDomainState = z.object({
   /** The last reduction, or null before the first successful read. */
   catalog: z.union([marketCatalogSchema, z.null()]),
-  /** ETag of `market.json` when the catalog was derived. */
-  marketEtag: z.string(),
+  /**
+   * ETag of `market.json` when the catalog was derived.
+   *
+   * Defaulted, not required, because this field REPLACED the two the catalog
+   * carried before 0.2.1 (`repositoriesEtag` / `curatedEtag`, one per upstream
+   * file) without the domain version being bumped. A record written by an
+   * older build therefore has no `marketEtag`, and a required field would
+   * reject the whole global — which does not merely lose the ETag, it makes
+   * `open` throw, drops the market to memory-only for good (a store that
+   * never opens is never written back, so it never heals), and costs a full
+   * download on every boot with an empty market whenever GitHub is
+   * unreachable. Defaulting to `''` reads the legacy record, keeps its
+   * catalog, and asks unconditionally once; the first successful write
+   * rewrites the global in the current shape. The dropped fields need no
+   * declaration — an object codec strips unknown keys.
+   */
+  marketEtag: z.string().default(''),
   /**
    * The market size the catalog was reduced with. A deployment that changes
    * `marketSize` must not keep serving a list cut to the old number.

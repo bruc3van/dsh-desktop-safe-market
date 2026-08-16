@@ -96,11 +96,27 @@ export declare function packageDirFromProfile(profileDir: string, packageName: s
 export interface BundleInfo {
     version: string;
     description: string;
+    /** `owner/name` when the manifest points at a GitHub repository; '' otherwise. */
+    repository: string;
     entries: {
         id: string;
         name: string;
     }[];
 }
+/**
+ * The GitHub `owner/name` a package manifest's `repository` field names.
+ *
+ * npm allows the field in several spellings — the object form, the shorthand
+ * string (`owner/name`, `github:owner/name`), and a git URL in any of the
+ * scheme flavours — and every one of them may also point somewhere that is
+ * not GitHub at all. This reduces the ones that do to a bare slug and answers
+ * '' for everything else, including a `directory` sub-path (a monorepo entry
+ * whose repository is shared with other packages, so the slug would join the
+ * wrong catalog row).
+ * @param manifest - the parsed package manifest.
+ * @returns the `owner/name` slug, or '' when the field names no GitHub repository.
+ */
+export declare function repositorySlugOf(manifest: unknown): string;
 /** Read one installed bundle: its manifest display facts and its patch's entry rows. */
 export declare function readBundleInfo(profileDir: string, packageName: string): Promise<BundleInfo>;
 /**

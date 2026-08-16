@@ -16,7 +16,7 @@
  * so staging the prompt can end with the user looking at the session it was
  * staged in.
  */
-import { useCallback, useEffect, useId, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
+import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
@@ -27,7 +27,9 @@ import type {
   MarketSkillsResult,
   SafeMarketSettings,
 } from '../contract.ts'
+import { isSafeVersion } from '../contract.ts'
 import type { MarketLocale } from './copy.ts'
+import { describeInstalled, ownedBy, ownedIndexOf, shortName } from './owned.ts'
 import { SkillsView } from './SkillsView.tsx'
 
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
@@ -40,6 +42,8 @@ export interface SafeMarketSnapshot {
    * command would hand the user a command aimed at someone else's deployment.
    */
   readonly profile: string | null
+  /** The market's own version, from the same `describe`; '' until it answers. */
+  readonly version: string
 }
 export type SafeMarketSource = ObservableSnapshot<SafeMarketSnapshot>
 
@@ -135,11 +139,6 @@ function matches(item: MarketPlugin, query: string, category: string, english: b
   return query.split(/\s+/).every(word => haystack.includes(word))
 }
 
-/** `@scope/name` → `name`; a bare name stays itself. */
-function shortName(packageName: string): string {
-  return packageName.startsWith('@') ? packageName.slice(packageName.indexOf('/') + 1) : packageName
-}
-
 /** The status a package row shows, from its own live facts. */
 function stateOf(item: MarketInstalledPackage): 'readFailed' | 'disabled' | 'failed' | 'running' | 'installed' {
   if (item.error !== '') return 'readFailed'
@@ -172,8 +171,15 @@ const INSTALLED_FILTER = 'dsh:installed'
  * the rows belong to the same card grid the catalog uses: one list of cards,
  * one of whose filters happens to be "the ones I already have".
  */
-function useInstalled({ t, listInstalled, setInstalledEnabled, uninstallInstalled }: {
+function useInstalled({ t, active, listInstalled, setInstalledEnabled, uninstallInstalled }: {
   t: MarketLocale
+  /**
+   * Whether the panel is on screen at all. The read is local and cheap, but
+   * with the market off there is nothing rendering it — and a read fired for
+   * a panel nobody is looking at would report its failures into a page whose
+   * only job is to explain the switch.
+   */
+  active: boolean
   listInstalled: MarketSectionInjected['listInstalled']
   setInstalledEnabled: MarketSectionInjected['setInstalledEnabled']
   uninstallInstalled: MarketSectionInjected['uninstallInstalled']
@@ -199,6 +205,7 @@ function useInstalled({ t, listInstalled, setInstalledEnabled, uninstallInstalle
   useEffect(() => () => { mounted.current = false }, [])
 
   const load = useCallback((): void => {
+    if (!active) return
     setState(previous => (previous.status === 'ready' ? previous : { status: 'loading' }))
     void listInstalled().then((result) => {
       if (!mounted.current) return
@@ -207,11 +214,11 @@ function useInstalled({ t, listInstalled, setInstalledEnabled, uninstallInstalle
       if (!mounted.current) return
       setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
     })
-  }, [listInstalled])
+  }, [active, listInstalled])
 
-  // One read per mount: the list changes only through these verbs (or a
-  // `dsh plugin` command, which needs a restart anyway) — a poll would add
-  // nothing but motion.
+  // One read per mount, and one more the first time the market is switched
+  // on: the list changes only through these verbs (or a `dsh plugin` command,
+  // which needs a restart anyway) — a poll would add nothing but motion.
   useEffect(() => { load() }, [load])
 
   const describe = (error: unknown): string => error instanceof Error ? error.message : String(error)
@@ -412,13 +419,21 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
-  const installed = useInstalled({ t, listInstalled, setInstalledEnabled, uninstallInstalled })
+  const enabled = snapshot.value.enabled
+  const installed = useInstalled({ t, active: enabled, listInstalled, setInstalledEnabled, uninstallInstalled })
   const installedSelected = category === INSTALLED_FILTER
+  // Rebuilt only when the installed set itself changes — every enable,
+  // disable and uninstall answers with the whole list, so the catalog's
+  // "already installed" marks follow those verbs without a second read.
+  // Above the market-off early return, where the rules of hooks need it.
+  const ownedIndex = useMemo(
+    () => ownedIndexOf(installed.state.status === 'ready' ? installed.state.result.packages : []),
+    [installed.state],
+  )
   // The notice's own state, kept apart from the cards': it can be answered
   // before any card has been clicked.
   const [choosing, setChoosing] = useState(false)
   const [chooseError, setChooseError] = useState('')
-  const enabled = snapshot.value.enabled
   // Read from the workspace domain's own store, so the notice clears itself
   // whether the workspace arrived from this button or from the sidebar.
   const readiness = useSyncExternalStore(workspaceReadiness.subscribe, workspaceReadiness.getSnapshot)
@@ -462,13 +477,14 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   }
 
   if (!enabled) {
-    // The installed set stays manageable with the market off: it lists what
-    // this machine already has, which reaches nothing outside it. There are no
-    // chips to filter with here, so the cards stand on their own.
+    // Off means off: the page is the switch and nothing else. The installed
+    // set is local enough that showing it here would break no privacy promise
+    // — but a marketplace the user has turned off should not still be running
+    // a plugin manager in their settings, and a panel with no filter chips
+    // above it read as a second, always-on feature rather than as part of the
+    // market they had just declined.
     return (
       <div className="dsh_market_page">
-        <h3 className="dsh_market_installedTitle">{t('installed.title')}</h3>
-        <InstalledCards t={t} installed={installed} />
         <div className="dsh_market_intro">
           <p className="dsh_market_introTitle">{t('intro.title')}</p>
           <p className="dsh_market_introBody">{t('intro.body')}</p>
@@ -524,13 +540,22 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
     // guard keeps the verb honest even if the click races the describe.
     const profile = snapshot.profile
     if (profile === null) return
-    onInstall(item, t('prompt', {
+    const owned = ownedBy(ownedIndex, item)
+    const common = {
       url: item.url,
       profile,
       // The Host reduces defaultBranch to a safe pattern (falling back to
       // `main`), so the interpolated value can only be a branch name.
       branch: item.defaultBranch,
-    }), viaNewWorkspace)
+    }
+    // Already installed: the hand-off is the same one, aimed at the newer
+    // version. Whether one EXISTS is the agent's first task, not something
+    // this card can know — the published catalog carries repository facts,
+    // not release versions — so the prompt opens by asking it to establish
+    // that and to stop if the answer is no.
+    onInstall(item, owned === undefined
+      ? t('prompt', common)
+      : t('prompt.upgrade', { ...common, installed: describeInstalled(owned) }), viaNewWorkspace)
   }
 
   return (
@@ -641,10 +666,22 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
         <ul className="dsh_market_cards">
           {shown.map((item) => {
             const card = cards[item.fullName]
+            const owned = ownedBy(ownedIndex, item)
             return (
               <li key={item.fullName} className="dsh_market_card">
                 <div className="dsh_market_head">
                   <span className="dsh_market_name" title={item.fullName}>{item.name}</span>
+                  {/* Says "you already have this" where the eye lands first,
+                      so the card's verb below is read as the upgrade it is.
+                      The version is shown only in a shape that cannot carry a
+                      line of its own into the layout. */}
+                  {owned !== undefined && (
+                    <span className="dsh_market_owned" title={owned.packageName}>
+                      {isSafeVersion(owned.version)
+                        ? t('installedHere', { version: owned.version })
+                        : t('installedHereUnknown')}
+                    </span>
+                  )}
                   <span className="dsh_market_stars" title={`${String(item.stars)} ${t('stars')}`}>
                     {`★ ${starCount(item.stars)}`}
                   </span>
@@ -696,7 +733,9 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
                           >
                             {card?.status === 'picking'
                               ? t('install.picking')
-                              : card?.status === 'busy' ? t('installing') : t('install')}
+                              : card?.status === 'busy'
+                                ? t('installing')
+                                : owned === undefined ? t('install') : t('upgrade')}
                           </button>
                           )}
                     </div>
@@ -788,7 +827,14 @@ export function MarketSection({
 
   return (
     <div className="dsh_market_section">
-      <h2 className="dsh_market_heading">{t('nav')}</h2>
+      {/* The market's own version belongs in the header because it may exist
+          nowhere else: the installed panel lists profile DEPENDENCIES, and a
+          deployment that seats this plugin as an in-box bundle (how the
+          desktop client ships it) has no row there to carry it. */}
+      <h2 className="dsh_market_heading">
+        {t('nav')}
+        {isSafeVersion(snapshot.version) && <span className="dsh_market_selfVersion">{`v${snapshot.version}`}</span>}
+      </h2>
       <div className="dsh_market_tabs" role="tablist" aria-label={t('tabs.aria')}>
         {pages.map(entry => (
           <button

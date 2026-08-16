@@ -30,6 +30,8 @@ export interface SafeMarketSnapshot {
      * command would hand the user a command aimed at someone else's deployment.
      */
     readonly profile: string | null;
+    /** The market's own version, from the same `describe`; '' until it answers. */
+    readonly version: string;
 }
 export type SafeMarketSource = ObservableSnapshot<SafeMarketSnapshot>;
 /** What the install hand-off reports back to the card that asked for it. */

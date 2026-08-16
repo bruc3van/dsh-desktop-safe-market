@@ -20,9 +20,20 @@ export const cssText = `
   color: var(--dsw-alias-label-primary);
 }
 .dsh_market_heading {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
   margin: 0;
   font-size: 18px;
   font-weight: 600;
+}
+/* The market's own version, beside its name: a fact about the deployment,
+   so it reads at the weight of one rather than of the title. */
+.dsh_market_selfVersion {
+  font-size: 12px;
+  font-weight: 400;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-label-tertiary);
 }
 /* The section's own page strip, in the official tab language. */
 .dsh_market_tabs {
@@ -274,6 +285,19 @@ export const cssText = `
   font-variant-numeric: tabular-nums;
   color: var(--dsw-alias-label-tertiary);
 }
+/* "You already have this": carried in the accent the rest of the section uses
+   for its own state lines, so a card the user owns is distinguishable from a
+   card they do not at a glance across the grid. */
+.dsh_market_owned {
+  flex: none;
+  max-width: 45%;
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--dsw-alias-state-business-primary);
+}
 /* Two cards to a row leaves about 250px of text width, which is not enough
    for category, owner, language, licence and date on one line — so this line
    wraps rather than ending in an ellipsis that hides the licence. */
@@ -376,14 +400,8 @@ export const cssText = `
 
 /* The installed set renders in the same card as the catalog rows, so it needs
    no layout of its own — only the few marks a shopfront card has no use for:
-   a title for the market-off view, the explanatory line above the grid, and
-   the live state badge in each card's head. */
-.dsh_market_installedTitle {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 22px;
-}
+   the explanatory line above the grid, and the live state badge in each
+   card's head. */
 .dsh_market_installedBody {
   margin: 0;
   font-size: 12px;

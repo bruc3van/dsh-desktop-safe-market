@@ -32,6 +32,23 @@ export const REPOSITORY_SLUG_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
  */
 export const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
 
+/**
+ * The only version shape the upgrade prompt may interpolate.
+ *
+ * An installed package's `version` is read from a manifest on this machine,
+ * but it is still text this plugin did not write: the package that authored
+ * it is exactly the one the upgrade prompt is about. Anything with a space in
+ * it could carry a sentence into an instruction the user is one keystroke
+ * from sending, so the prompt names the version only when it looks like one
+ * (and says "the installed version" otherwise).
+ */
+export const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$/
+
+/** Whether a version string is safe to interpolate into the prompt. */
+export function isSafeVersion(value: string): boolean {
+  return VERSION_PATTERN.test(value)
+}
+
 /** Whether a trimmed branch name is safe to interpolate into the prompt. */
 export function isSafeBranchName(value: string): boolean {
   if (!BRANCH_PATTERN.test(value)) return false
@@ -121,6 +138,16 @@ export interface MarketSkillsResult {
 export interface MarketEnvironment {
   /** The profile whose plugins an install would change. */
   readonly profile: string
+  /**
+   * The market's own version, for the section header.
+   *
+   * The installed panel would show it as an ordinary row — but only for a
+   * copy installed as a profile DEPENDENCY. A deployment that seats the
+   * market as an in-box bundle (which is how the desktop client ships it)
+   * has no such row by design, and would otherwise never state which market
+   * it is running. '' when the manifest could not be read.
+   */
+  readonly version: string
 }
 
 /** The `safe-market` settings namespace's durable shape. */
@@ -161,6 +188,16 @@ export interface MarketInstalledPackage {
   readonly packageName: string
   readonly version: string
   readonly description: string
+  /**
+   * The `owner/name` this package's manifest points its `repository` field
+   * at, when that field names a GitHub repository in a shape matching
+   * {@link REPOSITORY_SLUG_PATTERN}; '' otherwise.
+   *
+   * This is what joins an installed package to a catalog row: the catalog is
+   * keyed by repository (it is a crawl of GitHub) while an install is keyed by
+   * package name, and the two are only sometimes spelled alike.
+   */
+  readonly repository: string
   /** The market's own row: listed, but the panel must not disable it. */
   readonly self: boolean
   /** Package-level enablement: at least one of its entries is enabled. */
@@ -266,6 +303,7 @@ export const marketSkillsResultSchema = z.object({
 /** Strict wire codec for the deployment facts the browser needs. */
 export const marketEnvironmentSchema = z.object({
   profile: z.string(),
+  version: z.string(),
 }).readonly()
 
 /** Strict wire codec for the resolved settings section. */
@@ -298,6 +336,10 @@ export const marketInstalledPackageSchema = z.object({
   packageName: packageNameSchema,
   version: z.string(),
   description: z.string(),
+  // Either a slug the Host already shape-checked, or nothing. A manifest
+  // pointing somewhere unparseable must not fail the whole panel read, so the
+  // Host reduces it to '' rather than passing the raw field on.
+  repository: z.union([z.string().regex(REPOSITORY_SLUG_PATTERN), z.literal('')]),
   self: z.boolean(),
   enabled: z.boolean(),
   entries: z.array(marketInstalledEntrySchema).readonly(),

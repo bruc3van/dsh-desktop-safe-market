@@ -1,14 +1,3 @@
-/**
- * dsh-desktop-safe-market host plugin: mounts the `safeMarket` Typert Remote
- * service (the reduced community plugin catalog, the deployment's resolvable
- * skills, and the market's own durable settings) and registers its strict
- * Typert manifest. The client half ships in the same package (`./client`); the
- * web server serves it under /plugins/dsh-desktop-safe-market/client.js.
- *
- * The plugin installs nothing and runs no command. Its whole job is to put a
- * reviewed shortlist in front of the user and hand a security-review prompt —
- * naming the official install command — to a session the user then confirms.
- */
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
 /** Cordis plugin name (the Loader entry and client bundle id). */
