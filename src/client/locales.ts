@@ -84,6 +84,7 @@ tarball 优先用最新 release tag，没有就用默认分支 {branch}。装完
   'workspace.failed': '创建工作区失败：{reason}',
 
   'installed.title': '已安装的插件',
+  'installed.chip': '已安装',
   'installed.count': '共 {count} 个',
   'installed.body': '这里列出当前 profile 通过包安装的插件。停用会写入本 profile 的补丁层并立即生效；'
     + '卸载会先在本会话停用、再从安装清单移除，重启后完成清理。DSH 自带的插件不在此列。',
@@ -188,6 +189,7 @@ Prefer the latest release tag's tarball, falling back to the default branch {bra
   'workspace.failed': 'Could not create the workspace: {reason}',
 
   'installed.title': 'Installed plugins',
+  'installed.chip': 'Installed',
   'installed.count': '{count} total',
   'installed.body': 'Plugins installed into this profile as packages. Disabling writes a row into the profile’s own'
     + ' patch layer and takes effect immediately; uninstalling stops the plugin for this session and removes it from'

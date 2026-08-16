@@ -374,37 +374,15 @@ export const cssText = `
   cursor: pointer;
 }
 
-/* The installed panel: one block above the market list, rows divided by
-   hairlines rather than cards (it is a fact sheet, not a shopfront). */
-.dsh_market_installed {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 14px 16px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 10px;
-  background: var(--dsw-alias-bg-layer-3);
-}
-.dsh_market_installedHead {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-}
+/* The installed set renders in the same card as the catalog rows, so it needs
+   no layout of its own — only the few marks a shopfront card has no use for:
+   a title for the market-off view, the explanatory line above the grid, and
+   the live state badge in each card's head. */
 .dsh_market_installedTitle {
   margin: 0;
   font-size: 14px;
   font-weight: 600;
   line-height: 22px;
-}
-.dsh_market_installedCount {
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh_market_installedRefresh {
-  margin-left: auto;
-  padding: 3px 12px;
-  font-size: 12px;
 }
 .dsh_market_installedBody {
   margin: 0;
@@ -417,54 +395,6 @@ export const cssText = `
   font-size: 12px;
   line-height: 18px;
   color: var(--dsw-alias-state-business-primary);
-}
-.dsh_market_installedList {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin: 2px 0 0;
-  padding: 0;
-  list-style: none;
-}
-.dsh_market_installedRow {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-top: 10px;
-  border-top: 1px solid var(--dsw-alias-border-l2);
-}
-.dsh_market_installedRow:first-child {
-  padding-top: 0;
-  border-top: 0;
-}
-.dsh_market_installedRowHead {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-}
-.dsh_market_installedName {
-  overflow: hidden;
-  white-space: nowrap;
-  text-overflow: ellipsis;
-  font-size: 13px;
-  font-weight: 600;
-  line-height: 20px;
-}
-.dsh_market_installedTag {
-  flex: none;
-  padding: 1px 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 999px;
-  font-size: 11px;
-  line-height: 16px;
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh_market_installedVersion {
-  flex: none;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-  color: var(--dsw-alias-label-tertiary);
 }
 .dsh_market_installedState {
   flex: none;
@@ -483,29 +413,7 @@ export const cssText = `
 .dsh_market_installedState[data-state="readFailed"] {
   color: var(--dsw-alias-state-error-primary);
 }
-.dsh_market_installedDesc {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  margin: 0;
-  font-size: 13px;
-  line-height: 19px;
-  color: var(--dsw-alias-label-secondary);
-}
-.dsh_market_installedActions {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 8px;
-  padding-top: 2px;
-}
-.dsh_market_installedConfirm {
-  margin-right: auto;
-  font-size: 12px;
-  line-height: 18px;
-  color: var(--dsw-alias-state-error-primary);
-}
+
 /* The uninstall verb: outlined in the error color so the destructive action
    reads as such without filling the row. */
 .dsh_market_danger {

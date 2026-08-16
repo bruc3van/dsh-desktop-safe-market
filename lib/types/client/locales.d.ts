@@ -64,6 +64,7 @@ export declare const zh: {
     readonly 'workspace.choosing': "正在选择…";
     readonly 'workspace.failed': "创建工作区失败：{reason}";
     readonly 'installed.title': "已安装的插件";
+    readonly 'installed.chip': "已安装";
     readonly 'installed.count': "共 {count} 个";
     readonly 'installed.body': string;
     readonly 'installed.loading': "正在读取已安装插件…";

@@ -156,19 +156,41 @@ type InstalledState =
   | { readonly status: 'error'; readonly message: string }
 
 /**
- * The installed panel: the plugins installed into this profile, with
- * enable/disable and uninstall. It is local profile facts all the way down —
- * reading them reaches nothing outside this machine, so the panel answers
- * with the market off too. Uninstall asks once inline before it acts.
+ * The category chip that selects the installed set instead of a catalog
+ * category. The catalog's own keys are slugs from the shortlist, so a value
+ * carrying a colon cannot collide with one.
  */
-function InstalledPanel({ t, listInstalled, setInstalledEnabled, uninstallInstalled }: {
+const INSTALLED_FILTER = 'dsh:installed'
+
+/**
+ * The installed set's own state and verbs: the plugins installed into this
+ * profile, with enable/disable and uninstall. It is local profile facts all
+ * the way down — reading them reaches nothing outside this machine, so this
+ * answers with the market off too.
+ *
+ * A hook rather than a panel because the count belongs to the filter chip and
+ * the rows belong to the same card grid the catalog uses: one list of cards,
+ * one of whose filters happens to be "the ones I already have".
+ */
+function useInstalled({ t, listInstalled, setInstalledEnabled, uninstallInstalled }: {
   t: MarketLocale
   listInstalled: MarketSectionInjected['listInstalled']
   setInstalledEnabled: MarketSectionInjected['setInstalledEnabled']
   uninstallInstalled: MarketSectionInjected['uninstallInstalled']
-}): ReactElement {
+}): {
+  state: InstalledState
+  busy: string | null
+  confirming: string | null
+  notice: string
+  actionError: string
+  count: number
+  reload: () => void
+  toggle: (item: MarketInstalledPackage) => void
+  uninstall: (item: MarketInstalledPackage) => void
+  setConfirming: (name: string | null) => void
+} {
   const [state, setState] = useState<InstalledState>({ status: 'loading' })
-  // `${name}:toggle` / `${name}:uninstall`: one verb per panel at a time.
+  // `${name}:toggle` / `${name}:uninstall`: one verb at a time.
   const [busy, setBusy] = useState<string | null>(null)
   const [confirming, setConfirming] = useState<string | null>(null)
   const [notice, setNotice] = useState('')
@@ -187,8 +209,8 @@ function InstalledPanel({ t, listInstalled, setInstalledEnabled, uninstallInstal
     })
   }, [listInstalled])
 
-  // One read per mount: the list changes only through this panel's verbs (or
-  // a `dsh plugin` command, which needs a restart anyway) — a poll would add
+  // One read per mount: the list changes only through these verbs (or a
+  // `dsh plugin` command, which needs a restart anyway) — a poll would add
   // nothing but motion.
   useEffect(() => { load() }, [load])
 
@@ -233,39 +255,116 @@ function InstalledPanel({ t, listInstalled, setInstalledEnabled, uninstallInstal
     })
   }
 
-  const stateLabels: Record<ReturnType<typeof stateOf>, () => string> = {
-    running: () => t('installed.running'),
-    disabled: () => t('installed.disabled'),
-    failed: () => t('installed.failedState'),
-    readFailed: () => t('installed.readFailedState'),
-    installed: () => t('installed.installedState'),
+  const reload = (): void => {
+    setState({ status: 'loading' })
+    setNotice('')
+    setActionError('')
+    load()
   }
 
+  const count = state.status === 'ready' && state.result.error === '' ? state.result.packages.length : 0
+  return { state, busy, confirming, notice, actionError, count, reload, toggle, uninstall, setConfirming }
+}
+
+/**
+ * One installed package, in the same card the catalog rows use — so the grid
+ * stays one grid and the eye does not have to re-learn the layout when the
+ * filter changes.
+ */
+function InstalledCard({ t, item, installed }: {
+  t: MarketLocale
+  item: MarketInstalledPackage
+  installed: ReturnType<typeof useInstalled>
+}): ReactElement {
+  const { busy, confirming, setConfirming, toggle, uninstall } = installed
+  const busyRow = busy !== null && (busy === `${item.packageName}:toggle` || busy === `${item.packageName}:uninstall`)
+  const stateLabels: Record<ReturnType<typeof stateOf>, string> = {
+    running: t('installed.running'),
+    disabled: t('installed.disabled'),
+    failed: t('installed.failedState'),
+    readFailed: t('installed.readFailedState'),
+    installed: t('installed.installedState'),
+  }
   return (
-    <section className="dsh_market_installed">
-      <div className="dsh_market_installedHead">
-        <h3 className="dsh_market_installedTitle">{t('installed.title')}</h3>
-        {state.status === 'ready' && state.result.error === '' && (
-          <span className="dsh_market_installedCount">{t('installed.count', { count: String(state.result.packages.length) })}</span>
-        )}
-        <button
-          type="button"
-          className="dsh_market_ghost dsh_market_installedRefresh"
-          onClick={() => { setState({ status: 'loading' }); setNotice(''); setActionError(''); load() }}
-        >
-          {t('refresh')}
-        </button>
+    <li className="dsh_market_card">
+      <div className="dsh_market_head">
+        <span className="dsh_market_name" title={item.packageName}>{shortName(item.packageName)}</span>
+        <span className="dsh_market_installedState" data-state={stateOf(item)}>{stateLabels[stateOf(item)]}</span>
       </div>
+      <p className="dsh_market_meta">
+        {[item.self ? t('installed.self') : '', item.version === '' ? '' : `v${item.version}`]
+          .filter(part => part !== '').join(' · ')}
+      </p>
+      {item.description !== '' && <p className="dsh_market_desc">{item.description}</p>}
+      {item.error !== '' && <p className="dsh_market_cardError">{t('installed.readFailed', { reason: item.error })}</p>}
+      <div className="dsh_market_foot">
+        {confirming === item.packageName
+          ? (
+            <>
+              <span className="dsh_market_cardNotice">{t('installed.confirmUninstall', { name: shortName(item.packageName) })}</span>
+              <button
+                type="button"
+                className="dsh_market_danger"
+                disabled={busyRow}
+                onClick={() => { uninstall(item) }}
+              >
+                {busy === `${item.packageName}:uninstall` ? t('installed.uninstalling') : t('installed.confirm')}
+              </button>
+              <button
+                type="button"
+                className="dsh_market_ghost"
+                disabled={busyRow}
+                onClick={() => { setConfirming(null) }}
+              >
+                {t('installed.cancel')}
+              </button>
+            </>
+            )
+          : (
+            <>
+              {!item.self && (
+                <button
+                  type="button"
+                  className="dsh_market_ghost"
+                  disabled={busyRow || busy !== null || item.error !== '' || item.entries.length === 0}
+                  onClick={() => { toggle(item) }}
+                >
+                  {busy === `${item.packageName}:toggle`
+                    ? (item.enabled ? t('installed.disabling') : t('installed.enabling'))
+                    : (item.enabled ? t('installed.disable') : t('installed.enable'))}
+                </button>
+              )}
+              <button
+                type="button"
+                className="dsh_market_danger"
+                disabled={busyRow || busy !== null}
+                onClick={() => { setConfirming(item.packageName) }}
+              >
+                {t('installed.uninstall')}
+              </button>
+            </>
+            )}
+      </div>
+    </li>
+  )
+}
+
+/** The installed set as a card grid, with its own status lines above it. */
+function InstalledCards({ t, installed }: {
+  t: MarketLocale
+  installed: ReturnType<typeof useInstalled>
+}): ReactElement {
+  const { state, notice, actionError, reload } = installed
+  return (
+    <>
       <p className="dsh_market_installedBody">{t('installed.body')}</p>
       {notice !== '' && <p className="dsh_market_installedNotice">{notice}</p>}
-      {actionError !== '' && (
-        <p className="dsh_market_status" data-error="true">{actionError}</p>
-      )}
+      {actionError !== '' && <p className="dsh_market_status" data-error="true">{actionError}</p>}
       {state.status === 'loading' && <p className="dsh_market_status">{t('installed.loading')}</p>}
       {state.status === 'error' && (
         <p className="dsh_market_status" data-error="true">
           {t('installed.failed', { reason: state.message })}
-          <button type="button" className="dsh_market_ghost" onClick={() => { setState({ status: 'loading' }); load() }}>{t('retry')}</button>
+          <button type="button" className="dsh_market_ghost" onClick={reload}>{t('retry')}</button>
         </p>
       )}
       {state.status === 'ready' && state.result.error !== '' && (
@@ -275,73 +374,13 @@ function InstalledPanel({ t, listInstalled, setInstalledEnabled, uninstallInstal
         <p className="dsh_market_status">{t('installed.empty')}</p>
       )}
       {state.status === 'ready' && state.result.packages.length > 0 && (
-        <ul className="dsh_market_installedList">
-          {state.result.packages.map((item) => {
-            const busyRow = busy !== null && (busy === `${item.packageName}:toggle` || busy === `${item.packageName}:uninstall`)
-            return (
-              <li key={item.packageName} className="dsh_market_installedRow">
-                <div className="dsh_market_installedRowHead">
-                  <span className="dsh_market_installedName" title={item.packageName}>{shortName(item.packageName)}</span>
-                  {item.self && <span className="dsh_market_installedTag">{t('installed.self')}</span>}
-                  {item.version !== '' && <span className="dsh_market_installedVersion">{`v${item.version}`}</span>}
-                  <span className="dsh_market_installedState" data-state={stateOf(item)}>{stateLabels[stateOf(item)]()}</span>
-                </div>
-                {item.description !== '' && <p className="dsh_market_installedDesc">{item.description}</p>}
-                {item.error !== '' && <p className="dsh_market_status" data-error="true">{t('installed.readFailed', { reason: item.error })}</p>}
-                <div className="dsh_market_installedActions">
-                  {confirming === item.packageName
-                    ? (
-                      <>
-                        <span className="dsh_market_installedConfirm">{t('installed.confirmUninstall', { name: item.packageName })}</span>
-                        <button
-                          type="button"
-                          className="dsh_market_danger"
-                          disabled={busyRow}
-                          onClick={() => { uninstall(item) }}
-                        >
-                          {busy === `${item.packageName}:uninstall` ? t('installed.uninstalling') : t('installed.confirm')}
-                        </button>
-                        <button
-                          type="button"
-                          className="dsh_market_ghost"
-                          disabled={busyRow}
-                          onClick={() => { setConfirming(null) }}
-                        >
-                          {t('installed.cancel')}
-                        </button>
-                      </>
-                      )
-                    : (
-                      <>
-                        {!item.self && (
-                          <button
-                            type="button"
-                            className="dsh_market_ghost"
-                            disabled={busyRow || busy !== null || item.error !== '' || item.entries.length === 0}
-                            onClick={() => { toggle(item) }}
-                          >
-                            {busy === `${item.packageName}:toggle`
-                              ? (item.enabled ? t('installed.disabling') : t('installed.enabling'))
-                              : (item.enabled ? t('installed.disable') : t('installed.enable'))}
-                          </button>
-                        )}
-                        <button
-                          type="button"
-                          className="dsh_market_danger"
-                          disabled={busyRow || busy !== null}
-                          onClick={() => { setConfirming(item.packageName) }}
-                        >
-                          {t('installed.uninstall')}
-                        </button>
-                      </>
-                      )}
-                </div>
-              </li>
-            )
-          })}
+        <ul className="dsh_market_cards">
+          {state.result.packages.map(item => (
+            <InstalledCard key={item.packageName} t={t} item={item} installed={installed} />
+          ))}
         </ul>
       )}
-    </section>
+    </>
   )
 }
 
@@ -368,6 +407,8 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   const [refreshing, setRefreshing] = useState(false)
   const [query, setQuery] = useState('')
   const [category, setCategory] = useState('')
+  const installed = useInstalled({ t, listInstalled, setInstalledEnabled, uninstallInstalled })
+  const installedSelected = category === INSTALLED_FILTER
   // The notice's own state, kept apart from the cards': it can be answered
   // before any card has been clicked.
   const [choosing, setChoosing] = useState(false)
@@ -416,11 +457,13 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   }
 
   if (!enabled) {
-    // The installed panel stays up with the market off: it lists and manages
-    // what this machine already has, which reaches nothing outside it.
+    // The installed set stays manageable with the market off: it lists what
+    // this machine already has, which reaches nothing outside it. There are no
+    // chips to filter with here, so the cards stand on their own.
     return (
       <div className="dsh_market_page">
-        <InstalledPanel t={t} listInstalled={listInstalled} setInstalledEnabled={setInstalledEnabled} uninstallInstalled={uninstallInstalled} />
+        <h3 className="dsh_market_installedTitle">{t('installed.title')}</h3>
+        <InstalledCards t={t} installed={installed} />
         <div className="dsh_market_intro">
           <p className="dsh_market_introTitle">{t('intro.title')}</p>
           <p className="dsh_market_introBody">{t('intro.body')}</p>
@@ -481,7 +524,6 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
 
   return (
     <div className="dsh_market_page">
-      <InstalledPanel t={t} listInstalled={listInstalled} setInstalledEnabled={setInstalledEnabled} uninstallInstalled={uninstallInstalled} />
       {/* Says the prerequisite out loud before a click runs into it, and
           offers the same one action the cards do. It does not block browsing:
           the shortlist is worth reading without a workspace. */}
@@ -536,6 +578,17 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
           >
             {`${t('all')} ${String(catalog.items.length)}`}
           </button>
+          {/* The installed set is a filter over the same grid, not a panel of
+              its own: "the ones I already have" is just another way to narrow
+              the list, and it reads that way sitting among the categories. */}
+          <button
+            type="button"
+            className="dsh_market_chip"
+            data-on={installedSelected ? 'true' : 'false'}
+            onClick={() => { setCategory(current => (current === INSTALLED_FILTER ? '' : INSTALLED_FILTER)) }}
+          >
+            {`${t('installed.chip')} ${String(installed.count)}`}
+          </button>
           {catalog.categories.map(entry => (
             <button
               key={entry.key}
@@ -550,26 +603,30 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
         </div>
       )}
 
-      <p className="dsh_market_status" data-error={state.status === 'error' ? 'true' : 'false'}>
-        {state.status === 'error'
-          ? (
-            <>
-              {t('failed', { reason: state.message })}
-              <button type="button" className="dsh_market_ghost" onClick={() => { load(true) }}>{t('retry')}</button>
-            </>
-            )
-          : catalog === null
-            ? t('loading')
-            : shown.length === 0
-              ? t('empty')
-              : t('summary', { shown: String(shown.length), total: String(catalog.items.length) })}
-      </p>
+      {installedSelected
+        ? <InstalledCards t={t} installed={installed} />
+        : (
+          <p className="dsh_market_status" data-error={state.status === 'error' ? 'true' : 'false'}>
+            {state.status === 'error'
+              ? (
+                <>
+                  {t('failed', { reason: state.message })}
+                  <button type="button" className="dsh_market_ghost" onClick={() => { load(true) }}>{t('retry')}</button>
+                </>
+                )
+              : catalog === null
+                ? t('loading')
+                : shown.length === 0
+                  ? t('empty')
+                  : t('summary', { shown: String(shown.length), total: String(catalog.items.length) })}
+          </p>
+          )}
 
-      {snapshot.profile === null && catalog !== null && (
+      {snapshot.profile === null && catalog !== null && !installedSelected && (
         <p className="dsh_market_status">{t('install.profilePending')}</p>
       )}
 
-      {shown.length > 0 && (
+      {!installedSelected && shown.length > 0 && (
         <ul className="dsh_market_cards">
           {shown.map((item) => {
             const card = cards[item.fullName]
@@ -639,7 +696,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
         </ul>
       )}
 
-      {catalog !== null && (
+      {catalog !== null && !installedSelected && (
         <p className="dsh_market_note">
           {t('snapshot', { date: catalog.fetchedAt.slice(0, 10), scanned: String(catalog.scanned) })}
           {' · '}
