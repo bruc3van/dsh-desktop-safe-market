@@ -307,14 +307,25 @@ function InstalledCard({ t, item, installed }: {
           item.inBox ? t('installed.inBox') : '',
           item.version === '' ? '' : `v${item.version}`,
         ].filter(part => part !== '').join(' · ')}
+        {/* The how-and-why of a desktop seat, folded behind a hint icon: it
+            matters exactly once — when someone wonders what this row is —
+            and as a standing paragraph it dwarfed the card it explains.
+            Focusable, so the tooltip is reachable without a pointer. */}
+        {item.inBox && (
+          <span className="dsh_market_hint" tabIndex={0} aria-label={t('installed.inBoxNotice')}>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M8 7.3v3.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              <circle cx="8" cy="4.9" r="0.85" fill="currentColor" />
+            </svg>
+            <span className="dsh_market_hintTip" role="tooltip">{t('installed.inBoxNotice')}</span>
+          </span>
+        )}
       </p>
       {item.description !== '' && <p className="dsh_market_desc">{item.description}</p>}
       {item.error !== '' && <p className="dsh_market_cardError">{t('installed.readFailed', { reason: item.error })}</p>}
       {item.heldDown && item.entries.length > 0
         && <p className="dsh_market_cardNotice">{t('installed.heldDown')}</p>}
-      {/* Said on the card, not in the panel's blurb: it is true of this row
-          and misleading about every other one. */}
-      {item.inBox && <p className="dsh_market_cardNotice">{t('installed.inBoxNotice')}</p>}
       <div className="dsh_market_foot">
         {confirming === item.packageName
           ? (

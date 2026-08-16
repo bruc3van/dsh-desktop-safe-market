@@ -414,6 +414,54 @@ export const cssText = `
   line-height: 18px;
   color: var(--dsw-alias-state-business-primary);
 }
+/* The desktop-seat hint: an inline ⓘ whose explanation pops on hover or
+   keyboard focus. A tooltip rather than a standing paragraph because the
+   text answers a question most viewings never ask. */
+.dsh_market_hint {
+  position: relative;
+  display: inline-flex;
+  margin-left: 5px;
+  vertical-align: -2px;
+  color: var(--dsw-alias-label-tertiary);
+  cursor: help;
+  outline: none;
+}
+.dsh_market_hint svg {
+  width: 13px;
+  height: 13px;
+}
+.dsh_market_hint:hover,
+.dsh_market_hint:focus-visible {
+  color: var(--dsw-alias-label-secondary);
+}
+.dsh_market_hintTip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  /* Anchored to the icon's RIGHT edge, growing leftward. Centering reads
+     nicer but overflows the dialog whenever the icon sits in a right-column
+     card — which the seat card usually does, listed after the dependency
+     installs. Leftward growth stays inside: the meta line guarantees more
+     room on that side than the tip is wide. */
+  right: -8px;
+  z-index: 30;
+  width: 264px;
+  padding: 8px 10px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-3);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+  font-size: 12px;
+  line-height: 18px;
+  color: var(--dsw-alias-label-secondary);
+  text-align: left;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+.dsh_market_hint:hover .dsh_market_hintTip,
+.dsh_market_hint:focus-visible .dsh_market_hintTip {
+  opacity: 1;
+}
 .dsh_market_installedState {
   flex: none;
   margin-left: auto;
