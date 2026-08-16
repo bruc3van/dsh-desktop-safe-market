@@ -1,0 +1,67 @@
+name: Release
+
+# Tags are the release trigger: `git push origin vX.Y.Z` reruns the full
+# check gate, then cuts the GitHub Release for that tag. The install tarball
+# the READMEs pin (archive/refs/tags/vX.Y.Z.tar.gz) is served by GitHub for
+# any tag on its own, so this workflow exists for the changelog, not to
+# upload artifacts.
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+jobs:
+  # A tag that cannot typecheck, test, and build is not a release.
+  check:
+    uses: ./.github/workflows/check.yml
+
+  release:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          # The notes are built from the tag annotation and the commit range
+          # back to the previous tag, so the runner needs the full history
+          # and the tag objects, not the default shallow checkout.
+          fetch-depth: 0
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+
+          # The changelog is read off the commits themselves: work lands
+          # straight on master here, so GitHub's own generator (which lists
+          # merged PRs) would come back with nothing but a compare link.
+          prev="$(git describe --tags --abbrev=0 --match 'v*' "$TAG^" 2>/dev/null || true)"
+
+          # A tag annotated with a real summary (see v0.2.1) leads the notes;
+          # one annotated with just the version number adds nothing, so it is
+          # dropped rather than repeated under the title.
+          annotation="$(git tag -l --format='%(contents)' "$TAG")"
+          if [ "$(printf '%s' "$annotation" | tr -d '[:space:]')" = "$TAG" ]; then
+            annotation=''
+          fi
+
+          {
+            if [ -n "$annotation" ]; then printf '%s\n\n' "$annotation"; fi
+            printf '## Changes\n\n'
+            if [ -n "$prev" ]; then
+              git log --no-merges --format='- %s' "$prev..$TAG"
+              printf '\n**Full Changelog**: %s/compare/%s...%s\n' \
+                "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY" "$prev" "$TAG"
+            else
+              # First tag in the repo: no range to diff against.
+              git log --no-merges --format='- %s' "$TAG"
+            fi
+          } > notes.md
+
+          gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md

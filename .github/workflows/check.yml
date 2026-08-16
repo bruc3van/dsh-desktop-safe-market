@@ -11,6 +11,9 @@ on:
     branches:
       - master
   pull_request:
+  # release.yml calls this workflow so a tag cuts a Release only after the
+  # same gate master runs has gone green — one definition, two entry points.
+  workflow_call:
 
 permissions:
   contents: read
