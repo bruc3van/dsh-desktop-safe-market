@@ -1,21 +1,24 @@
 /**
- * The catalog source: the community snapshot published by awesome-dsh-plugin,
- * reduced on the Host to a balanced top 100.
+ * The catalog source: the curated market published by awesome-dsh-plugin.
  *
- * The snapshot lives in two files. `repositories.json` is the machine-readable
- * daily crawl (every repository carrying the `dsh-plugin` topic, with its
- * assigned category already applied); `curated.json` carries the human
- * judgement the crawl cannot make — which entries are not plugins at all
- * (competing catalog sites, product repos whose stars belong to something
- * else). The crawl does NOT have those exclusions applied, so a client that
- * read only the first file would put a rival catalog at the top of its own
- * market. Both are therefore read together, and the reduction happens here
- * rather than in the browser: the client receives 100 rows, not 2.4 MB.
+ * Every editorial decision — who is excluded, how rows are categorized, how
+ * the list is balanced across categories — happens upstream. This plugin
+ * reads the single published `market.json` (the daily crawl reduced there to
+ * a balanced list of at most 300 entries) and answers the browser by
+ * truncating that order to the configured market size, so the two sides of
+ * the integration never disagree about the selection rule. The crawl that
+ * feeds the market stays upstream; this side downloads a small curated file,
+ * not a 2.4 MB snapshot plus a curation sidecar.
+ *
+ * The published body is still remote text from a public file and is treated
+ * as hostile here: slugs are shape-checked, links are rebuilt from the slug,
+ * branch names are kept only when they match the safe pattern, and every
+ * field is re-truncated before the browser sees it.
  */
 import type { MarketCatalog, MarketCategory, MarketPlugin } from './contract.ts'
 import { isSafeBranchName, REPOSITORY_SLUG_PATTERN } from './contract.ts'
 
-/** A snapshot is refreshed daily upstream; asking more often than this is noise. */
+/** The market is refreshed daily upstream; asking more often than this is noise. */
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1_000
 
 const FETCH_TIMEOUT_MS = 20_000
@@ -23,52 +26,43 @@ const FETCH_TIMEOUT_MS = 20_000
 /** A description longer than this is a README pasted into the field, not a summary. */
 const DESCRIPTION_LIMIT = 300
 
-/**
- * Repositories the market never lists even though the crawl and the curation
- * both keep them: this plugin, the desktop client it is named for, and the
- * catalog that feeds this view. None is a plugin a session can install.
- */
-const SELF_EXCLUDED = new Set([
-  'bruc3van/dsh-desktop',
-  'bruc3van/dsh-desktop-safe-market',
-  'bruc3van/awesome-dsh-plugin',
-])
+/** The only published schema this plugin understands. */
+const SCHEMA_VERSION = 1
 
-interface RawRepository {
-  default_branch?: unknown
+/** One published entry, before the wire pass. Every field may be anything. */
+interface RawEntry {
   full_name?: unknown
   description?: unknown
+  stargazers_count?: unknown
+  language?: unknown
+  license?: unknown
+  pushed_at?: unknown
+  default_branch?: unknown
   category?: unknown
   category_zh?: unknown
   category_en?: unknown
-  language?: unknown
-  stargazers_count?: unknown
-  license?: unknown
-  archived?: unknown
-  disabled?: unknown
-  pushed_at?: unknown
 }
 
 /**
- * Where a reduction survives a restart. The catalog source neither opens nor
- * closes this — the plugin body owns the domain's lifecycle and hands the
+ * Where a parsed catalog survives a restart. The catalog source neither opens
+ * nor closes this — the plugin body owns the domain's lifecycle and hands the
  * source a narrow port, so a deployment without durable storage can still run
  * the market from memory alone.
  */
 export interface CatalogCache {
-  /** The last reduction and the ETags it was derived with. */
-  read: () => { catalog: MarketCatalog | null; repositoriesEtag: string; curatedEtag: string }
-  /** Persist a fresh reduction. Failures are the cache's own business. */
-  write: (next: { catalog: MarketCatalog; repositoriesEtag: string; curatedEtag: string }) => void
+  /** The last parse and the ETag it was derived with. */
+  read: () => { catalog: MarketCatalog | null; marketEtag: string }
+  /** Persist a fresh parse. Failures are the cache's own business. */
+  write: (next: { catalog: MarketCatalog; marketEtag: string }) => void
 }
 
 /** Deployment-varying knobs the plugin config owns. */
 export interface CatalogOptions {
-  /** Base URL holding `repositories.json` and `curated.json`. */
+  /** Base URL holding `market.json`. */
   readonly base: string
   /** How many plugins the market shows. */
   readonly marketSize: number
-  /** Durable seat for the reduction; absent means memory-only. */
+  /** Durable seat for the parse; absent means memory-only. */
   readonly cache?: CatalogCache
 }
 
@@ -104,77 +98,36 @@ function branchName(value: unknown): string {
 }
 
 /**
- * The market's selection rule. A straight star ranking would hand almost every
- * seat to two or three categories — the crawl's biggest bucket alone holds
- * about a third of the ecosystem — and the point of this view is to answer
- * "what can DSH do", not "what has the most stars". So each category is sorted
- * by stars and the seats are dealt round by round: every category places its
- * best entry before any category places its second. The result is then ordered
- * by stars for display, so the list still reads as a leaderboard.
- * @param pool - every kept row, already sorted by stars descending.
- * @param marketSize - how many seats to deal.
- * @returns the dealt rows, ordered by stars descending.
+ * Parse the published market into the catalog the browser renders. The
+ * publisher's order IS the balance — every category places its best entry
+ * before any places its second — so rows are kept in file order and truncated
+ * to the requested size; nothing is re-ranked here.
+ * @param body - the parsed `market.json` body.
+ * @param marketSize - how many rows the browser shows.
+ * @returns the parsed, validated, truncated catalog.
+ * @throws when the body is not a market this plugin understands.
  */
-export function selectBalanced(pool: readonly MarketPlugin[], marketSize: number): MarketPlugin[] {
-  const buckets = new Map<string, MarketPlugin[]>()
-  for (const item of pool) {
-    const bucket = buckets.get(item.category)
-    if (bucket === undefined) buckets.set(item.category, [item])
-    else bucket.push(item)
+export function deriveMarket(body: unknown, marketSize: number): MarketCatalog {
+  const envelope = body as { schema_version?: unknown; entries?: unknown; source_fetched_at?: unknown; source_repo_count?: unknown }
+  if (envelope.schema_version !== SCHEMA_VERSION) {
+    const version = envelope.schema_version === undefined ? 'absent' : String(envelope.schema_version)
+    throw new Error(`unsupported market.json schema version ${version}`)
   }
-  // Deal in a stable order: the category whose best entry is strongest goes
-  // first each round, so the very top of the list is never an accident of
-  // map insertion order.
-  const best = (bucket: readonly MarketPlugin[]): number => bucket[0]?.stars ?? 0
-  const order = [...buckets.values()].sort((a, b) => best(b) - best(a))
-  const picked: MarketPlugin[] = []
-  for (let round = 0; picked.length < marketSize; round += 1) {
-    let dealt = false
-    for (const bucket of order) {
-      const item = bucket[round]
-      if (item === undefined) continue
-      picked.push(item)
-      dealt = true
-      if (picked.length >= marketSize) break
-    }
-    if (!dealt) break
-  }
-  return picked.sort((a, b) => b.stars - a.stars)
-}
+  const rows = Array.isArray(envelope.entries) ? envelope.entries as RawEntry[] : []
+  if (rows.length === 0) throw new Error('the published market carried no entries')
 
-/**
- * Reduce one crawl plus its curation into the catalog the browser renders.
- * @param repositoriesJson - the parsed `repositories.json` snapshot.
- * @param curatedJson - the parsed `curated.json` curation.
- * @param marketSize - how many rows the market shows.
- * @returns the reduced catalog.
- */
-export function deriveCatalog(
-  repositoriesJson: unknown,
-  curatedJson: unknown,
-  marketSize: number,
-): MarketCatalog {
-  const snapshot = repositoriesJson as { repositories?: unknown; fetched_at?: unknown; total_count?: unknown }
-  const rows = Array.isArray(snapshot.repositories) ? snapshot.repositories as RawRepository[] : []
-  if (rows.length === 0) throw new Error('the catalog snapshot carried no repositories')
-
-  const curated = curatedJson as { excluded_repos?: unknown; leaderboard_exclusions?: unknown }
-  const excluded = new Set(SELF_EXCLUDED)
-  for (const key of ['excluded_repos', 'leaderboard_exclusions'] as const) {
-    const map = curated[key]
-    if (typeof map !== 'object' || map === null) continue
-    for (const name of Object.keys(map)) excluded.add(name)
-  }
-
-  const pool: MarketPlugin[] = []
+  const items: MarketPlugin[] = []
+  const knownNames = new Set<string>()
   for (const row of rows) {
     const fullName = repositorySlug(row.full_name)
-    if (fullName === null || excluded.has(fullName)) continue
-    if (row.archived === true || row.disabled === true) continue
+    // The publisher's validator makes either case impossible; the wire pass
+    // exists so a poisoned or broken file cannot steer the renderer.
+    if (fullName === null || knownNames.has(fullName)) continue
+    knownNames.add(fullName)
     const category = text(row.category, 60)
     if (category === '') continue
     const slash = fullName.indexOf('/')
-    pool.push({
+    items.push({
       fullName,
       owner: fullName.slice(0, slash),
       name: fullName.slice(slash + 1),
@@ -190,23 +143,22 @@ export function deriveCatalog(
       categoryEn: text(row.category_en, 60) || category,
     })
   }
-  pool.sort((a, b) => b.stars - a.stars)
 
-  const items = selectBalanced(pool, marketSize)
+  const cut = items.slice(0, marketSize)
   const categories: MarketCategory[] = []
-  for (const item of items) {
-    const seen = categories.find(entry => entry.key === item.category)
-    if (seen === undefined) categories.push({ key: item.category, zh: item.categoryZh, en: item.categoryEn, count: 1 })
-    else (seen as { count: number }).count += 1
+  for (const item of cut) {
+    const known = categories.find(entry => entry.key === item.category)
+    if (known === undefined) categories.push({ key: item.category, zh: item.categoryZh, en: item.categoryEn, count: 1 })
+    else (known as { count: number }).count += 1
   }
   categories.sort((a, b) => b.count - a.count || a.key.localeCompare(b.key))
 
   return {
-    items,
+    items: cut,
     categories,
-    fetchedAt: text(snapshot.fetched_at, 40),
+    fetchedAt: text(envelope.source_fetched_at, 40),
     refreshedAt: new Date().toISOString(),
-    scanned: count(snapshot.total_count) || rows.length,
+    scanned: count(envelope.source_repo_count) || rows.length,
   }
 }
 
@@ -233,24 +185,23 @@ export interface CatalogSource {
  */
 export function createCatalogSource(options: CatalogOptions): CatalogSource {
   const base = options.base.replace(/\/+$/, '')
+  const marketUrl = `${base}/market.json`
   // The durable seat is NOT seeded at construction time. The plugin body
   // hands the source a cache port whose backing domain opens asynchronously
   // after this constructor returns, so reading it here would always see the
   // initial (empty) state and a restart would pay a full download instead of
-  // two 304s. The seed is instead pulled lazily, on the first read — by then
+  // a 304. The seed is instead pulled lazily, on the first read — by then
   // the domain is open, and the port answers from the state the effect
   // adopted. Reading it again whenever the closure is still empty also
-  // covers the rare read that wins the race against the domain opening.
+  // covers a read that raced the domain open.
   let catalog: MarketCatalog | null = null
-  let repositoriesEtag = ''
-  let curatedEtag = ''
+  let marketEtag = ''
   const seedFromCache = (): void => {
     if (catalog !== null) return
     const cached = options.cache?.read()
     if (cached === undefined || cached.catalog === null) return
     catalog = cached.catalog
-    repositoriesEtag = cached.repositoriesEtag
-    curatedEtag = cached.curatedEtag
+    marketEtag = cached.marketEtag
   }
   let inFlight: Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }> | null = null
 
@@ -261,34 +212,25 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
   }
 
   const refresh = async (signal: AbortSignal): Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }> => {
-    const repositoriesUrl = `${base}/repositories.json`
-    const curatedUrl = `${base}/curated.json`
-    // Conditional first: the crawl is 2.4 MB and moves once a day, so most
-    // reads should cost two 304s. Either file moving invalidates the
-    // reduction — the curation decides who is dropped — so a single change
-    // re-reads both.
-    if (catalog !== null && repositoriesEtag !== '' && curatedEtag !== '') {
-      const [repositories, curatedResponse] = await Promise.all([
-        fetch(repositoriesUrl, { signal, headers: { 'if-none-match': repositoriesEtag } }),
-        fetch(curatedUrl, { signal, headers: { 'if-none-match': curatedEtag } }),
-      ])
-      if (repositories.status === 304 && curatedResponse.status === 304) {
+    // Conditional first: the published market is small and moves at most once
+    // a day, so a 304 answers most reads. A conditional 200 IS the fresh body
+    // and is consumed directly — one file is the whole source, so there is no
+    // second file whose state must stay paired with it.
+    let response: Response
+    if (catalog !== null && marketEtag !== '') {
+      response = await fetch(marketUrl, { signal, headers: { 'if-none-match': marketEtag } })
+      if (response.status === 304) {
         catalog = { ...catalog, refreshedAt: new Date().toISOString() }
-        options.cache?.write({ catalog, repositoriesEtag, curatedEtag })
+        options.cache?.write({ catalog, marketEtag })
         return { catalog, stale: false, error: '' }
       }
+    } else {
+      response = await fetch(marketUrl, { signal })
     }
-
-    const [repositories, curatedResponse] = await Promise.all([
-      fetch(repositoriesUrl, { signal }),
-      fetch(curatedUrl, { signal }),
-    ])
-    if (!repositories.ok) throw new Error(`catalog HTTP ${String(repositories.status)}`)
-    if (!curatedResponse.ok) throw new Error(`curation HTTP ${String(curatedResponse.status)}`)
-    catalog = deriveCatalog(await repositories.json(), await curatedResponse.json(), options.marketSize)
-    repositoriesEtag = repositories.headers.get('etag') ?? ''
-    curatedEtag = curatedResponse.headers.get('etag') ?? ''
-    options.cache?.write({ catalog, repositoriesEtag, curatedEtag })
+    if (!response.ok) throw new Error(`catalog HTTP ${String(response.status)}`)
+    catalog = deriveMarket(await response.json(), options.marketSize)
+    marketEtag = response.headers.get('etag') ?? ''
+    options.cache?.write({ catalog, marketEtag })
     return { catalog, stale: false, error: '' }
   }
 
@@ -300,20 +242,20 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
       if (signal?.aborted) throw signal.reason ?? new Error('This operation was aborted')
       if (!force && fresh() && catalog !== null) return { catalog, stale: false, error: '' }
       // One network read at a time: the tab can be reopened while the first
-      // is still running, and two 2.4 MB downloads answer the same question.
-      // The shared request is bound to the fetch timeout only — caller
-      // lifetimes never abort it, because the abort of one caller must not
-      // hand every other caller a dead answer. A caller that aborts stops
-      // waiting for its own copy of the result; the read itself finishes and
-      // serves whoever is still listening. `force` against an already
-      // running read merges into it (that read IS the fresh download force
-      // asked for), so no force gesture is dropped or duplicated.
+      // is still running, and two downloads answer the same question. The
+      // shared request is bound to the fetch timeout only — caller lifetimes
+      // never abort it, because the abort of one caller must not hand every
+      // other caller a dead answer. A caller that aborts stops waiting for
+      // its own copy of the result; the read itself finishes and serves
+      // whoever is still listening. `force` against an already running read
+      // merges into it (that read IS the fresh download force asked for), so
+      // no force gesture is dropped or duplicated.
       const pending = (inFlight ??= (async () => {
         const lifetime = AbortSignal.timeout(FETCH_TIMEOUT_MS)
         try {
           return await refresh(lifetime)
         } catch (error) {
-          // A snapshot already in memory still answers the question; the
+          // A catalog already in memory still answers the question; the
           // browser is told the answer is old rather than shown a blank tab.
           const message = errorText(error)
           if (catalog !== null) return { catalog, stale: true, error: message }

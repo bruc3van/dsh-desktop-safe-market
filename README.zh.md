@@ -66,14 +66,13 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 
 ## 数据来源
 
-[awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 的每日快照：
+市场只读 [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 每日快照管线发布的一个精选文件 [`market.json`](https://github.com/bruc3van/awesome-dsh-plugin/blob/main/data/market.json)，全部编辑决策都在上游（爬取与人工名单所在处）完成：
 
-- `repositories.json` —— 带 `dsh-plugin` 标签的仓库爬取结果（含分类、star、许可证、最近推送时间）；
-- `curated.json` —— 人工排除名单（竞品目录站、star 不属于该插件的产品仓库等）。
+- 上游对带 `dsh-plugin` 标签的爬取（`repositories.json`）做过滤：要求有简介、剔除归档/停用仓库、应用 `curated.json` 人工排除名单；
+- 分类与**均衡发牌**也在上游——不是纯按 star 排序（那样两三个分类就会吃掉几乎所有席位），而是每类先出最强、再出次强，至多 300 席；
+- 本插件按该顺序截断到 `marketSize`（默认 200），并在 Host 侧重校验每一行后才发给浏览器。
 
-**两份必须一起读**：爬取结果里没有应用排除名单，只读第一份会让一个竞品目录站排在你的市场首位。归档仓库同样被剔除。
-
-选人规则不是纯按 star 排序——那样两三个分类就会吃掉几乎所有席位。这里按分类**轮流发牌**：每个分类先放出自己最强的一个，再放第二个，直到 100 席满；最终展示时再按 star 排序，所以列表读起来仍然像一张榜单。
+接口协议——字段形状、截断上限、分支名白名单、顺序不变量与版本规则——见 [docs/market-json-spec.md](docs/market-json-spec.md)。
 
 ## 配置
 
@@ -81,14 +80,14 @@ tarball 优先取最新 release tag，没有 release 则退回默认分支（分
 
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
-| `catalogBase` | awesome-dsh-plugin 的 `data/` 目录 | 换成你自己的目录来源 |
-| `marketSize` | `100` | 市场展示多少个插件 |
+| `catalogBase` | awesome-dsh-plugin 的 `data/` 目录 | 指向该文件的镜像 |
+| `marketSize` | `200` | 市场展示多少个插件 |
 
 ## 安全边界
 
 - **插件自身不执行任何安装命令**，也没有能执行它的接口——审查与安装因此不可分割；
-- **目录在 Host 侧读取并裁剪**后才发给浏览器（约 100 行，而不是 2.4 MB 快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（两次 304；连不上 GitHub 时用上次的目录）；
-- **仓库链接由 `owner/name` 重新拼装**，不采信快照里的地址，因此被投毒的快照无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
+- **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选后的至多 300 行，而不是 2.4 MB 爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；连不上 GitHub 时用上次的目录）；
+- **仓库链接由 `owner/name` 重新拼装**，不采信文件里的地址，因此被投毒的文件无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
 - **默认分支名进提示词前经过模式校验**（`[A-Za-z0-9][A-Za-z0-9._/-]*` 加 git ref 规则，不合格一律回落 `main`），提示词同时声明 URL 与分支为市场提供的不透明字面量——被投毒的分支名无法向审查提示词注入指令；
 - 卡片全部以纯文本渲染；
 - 关闭状态下 Remote 接口直接拒绝，无法绕过开关读取目录；

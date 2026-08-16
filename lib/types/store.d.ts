@@ -2,11 +2,11 @@
  * The market's durable domain: the reduced catalog and the ETags that let the
  * next read ask conditionally.
  *
- * Caching the reduction rather than the crawl is the point. The snapshot is
- * 2.4 MB and moves once a day; what the browser needs is the ~100 rows it was
- * reduced to. Keeping those on disk means a Host restart costs two 304s
- * instead of a full download, and a Host that cannot reach GitHub at all
- * still opens the market with the last catalog it saw.
+ * Caching the parsed catalog rather than the published file is the point. The
+ * published market is small and moves at most once a day; what the browser
+ * needs is its own cut of it. Keeping that cut on disk means a Host restart
+ * costs one 304 instead of a download, and a Host that cannot reach GitHub at
+ * all still opens the market with the last catalog it saw.
  */
 import { z } from 'zod';
 /** One uninstall whose stop rows are still in the user's patch file. */
@@ -43,8 +43,7 @@ export declare const safeMarketDomainState: z.ZodObject<{
         refreshedAt: z.ZodString;
         scanned: z.ZodNumber;
     }, z.core.$strip>>, z.ZodNull]>;
-    repositoriesEtag: z.ZodString;
-    curatedEtag: z.ZodString;
+    marketEtag: z.ZodString;
     marketSize: z.ZodNumber;
     catalogBase: z.ZodString;
     pendingUninstall: z.ZodDefault<z.ZodArray<z.ZodObject<{
@@ -98,8 +97,7 @@ export declare const safeMarketDomainSpec: {
                 refreshedAt: z.ZodString;
                 scanned: z.ZodNumber;
             }, z.core.$strip>>, z.ZodNull]>;
-            repositoriesEtag: z.ZodString;
-            curatedEtag: z.ZodString;
+            marketEtag: z.ZodString;
             marketSize: z.ZodNumber;
             catalogBase: z.ZodString;
             pendingUninstall: z.ZodDefault<z.ZodArray<z.ZodObject<{
@@ -135,8 +133,7 @@ export declare const safeMarketDomainSpec: {
                 refreshedAt: string;
                 scanned: number;
             }> | null;
-            repositoriesEtag: string;
-            curatedEtag: string;
+            marketEtag: string;
             marketSize: number;
             catalogBase: string;
             pendingUninstall: {

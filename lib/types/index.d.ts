@@ -23,7 +23,7 @@ export declare const inject: string[];
 export type { MarketCatalog, MarketCatalogResult, MarketCategory, MarketEnvironment, MarketPlugin, MarketSkill, MarketSkillsResult, SafeMarketSettings, } from './contract.ts';
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
-    /** Base URL holding `repositories.json` and `curated.json`. */
+    /** Base URL holding `market.json`. */
     catalogBase: string;
     /** How many plugins the market shows. */
     marketSize: number;

@@ -4,7 +4,7 @@ English | [中文](./README.zh.md)
 
 A **review-before-install** extension marketplace for the DeepSeek Harness web GUI. It adds a **Marketplace** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
 
-- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile with their live state, each disableable/enableable and uninstallable (what shipped with DSH is not listed); below it, 100 community plugins balanced across categories. **Review and install** installs nothing: it opens a new session, stages a **security-review prompt** in the composer, and closes Settings, so an agent reads the code and only then runs the official install command.
+- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile with their live state, each disableable/enableable and uninstallable (what shipped with DSH is not listed); below it, 200 community plugins balanced across categories. **Review and install** installs nothing: it opens a new session, stages a **security-review prompt** in the composer, and closes Settings, so an agent reads the code and only then runs the official install command.
 - **Skills** — what the current session can actually resolve.
 
 ![The marketplace tab](./assets/screenshots/market.png)
@@ -66,14 +66,13 @@ Addressing it by session is required, not lazy: the skill registry is host+per-s
 
 ## Where the data comes from
 
-The daily snapshot published by [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin):
+The market reads a single published file, [`market.json`](https://github.com/bruc3van/awesome-dsh-plugin/blob/main/data/market.json), from [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin)'s daily snapshot pipeline. Every editorial decision happens upstream, where the crawl and the human curation live:
 
-- `repositories.json` — the crawl of repositories tagged `dsh-plugin`, with category, stars, licence, and last push;
-- `curated.json` — the human exclusions (rival catalog sites, product repos whose stars belong to something else).
+- the crawl of repositories tagged `dsh-plugin` (`repositories.json`) is filtered there — a description is required, archived/disabled repositories are dropped, and the exclusions in `curated.json` are applied;
+- rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every seat to two or three categories), but seats dealt round by round so every category places its best entry before any places its second, up to 300;
+- this plugin truncates that order to `marketSize` (default 200) and re-validates every row on the Host before the browser sees it.
 
-**Both are read together**: the crawl does *not* have the exclusions applied, so reading only the first would put a rival catalog at the top of your own market. Archived repositories are dropped too.
-
-Selection is not a straight star ranking — that would hand almost every seat to two or three categories. Seats are **dealt round by round**: every category places its best entry before any category places its second, until 100 are filled. The result is then ordered by stars, so the list still reads as a leaderboard.
+The wire protocol — field shapes, truncation limits, the branch-name whitelist, the ordering invariant, and the versioning rules — is documented in [docs/market-json-spec.md](docs/market-json-spec.md).
 
 ## Configuration
 
@@ -81,14 +80,14 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 
 | Field | Default | Meaning |
 | --- | --- | --- |
-| `catalogBase` | awesome-dsh-plugin's `data/` directory | Point the market at your own curation |
-| `marketSize` | `100` | How many plugins the market shows |
+| `catalogBase` | awesome-dsh-plugin's `data/` directory | Point the market at a mirror of the same file |
+| `marketSize` | `200` | How many plugins the market shows |
 
 ## Security boundary
 
 - **The plugin runs no install command and exposes no interface that could** — review and install are therefore inseparable;
-- **the catalog is fetched and reduced on the Host** before the browser sees it (about 100 rows, not a 2.4 MB snapshot), and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (two 304s, or the last catalog when GitHub is unreachable);
-- **repository links are rebuilt from `owner/name`** rather than trusted from the snapshot, so a poisoned snapshot cannot contribute a URL scheme of its own — the wire codec enforces the rebuilt shape, not just a comment;
+- **the market file is fetched and re-validated on the Host** before the browser sees it — a curated list of at most 300 rows, not the 2.4 MB crawl — and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (one 304, or the last catalog when GitHub is unreachable);
+- **repository links are rebuilt from `owner/name`** rather than trusted from the file, so a poisoned file cannot contribute a URL scheme of its own — the wire codec enforces the rebuilt shape, not just a comment;
 - **the default branch is pattern-checked before it reaches the prompt** (`[A-Za-z0-9][A-Za-z0-9._/-]*` plus the git ref rules; anything else falls back to `main`), and the prompt declares both the URL and the branch as opaque marketplace literals — a poisoned branch name cannot inject instructions into the review;
 - every card renders as plain text;
 - while disabled, the Remote refuses — the catalog cannot be read around the switch;

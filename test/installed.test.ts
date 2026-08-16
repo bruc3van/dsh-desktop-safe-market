@@ -494,8 +494,7 @@ function storedState(overrides: Partial<SafeMarketDomainState> = {}): SafeMarket
       refreshedAt: '2025-08-16T00:00:00Z',
       scanned: 1,
     },
-    repositoriesEtag: '"r1"',
-    curatedEtag: '"c1"',
+    marketEtag: '"m1"',
     marketSize: 100,
     catalogBase: 'https://example.test/data',
     pendingUninstall: [],
@@ -511,17 +510,17 @@ test('adopting a usable stored catalog keeps the cache usable (the cut travels w
   // marketSize (1) and catalogBase ('') behind, and the cache gate — which
   // re-checks those — turned the adopted catalog permanently unusable.
   assert.equal(usable(adopted), true)
-  assert.equal(adopted.repositoriesEtag, '"r1"')
+  assert.equal(adopted.marketEtag, '"m1"')
   assert.deepEqual(adopted.pendingUninstall, [{ packageName: 'x', entryIds: ['x'], at: '2026-01-01T00:00:00Z' }])
 })
 
 test('adoption keeps a newer memory catalog and skips an unusable stored one', async () => {
   const usable = (candidate: SafeMarketDomainState): boolean =>
     candidate.catalog !== null && candidate.marketSize === 100 && candidate.catalogBase === 'https://example.test/data'
-  const memory = storedState({ repositoriesEtag: '"r-new"', curatedEtag: '"c-new"' })
+  const memory = storedState({ marketEtag: '"m-new"' })
   // A catalog that landed while the domain was opening is newer than disk.
-  const kept = adoptDomainState(memory, storedState({ repositoriesEtag: '"r-old"' }), usable)
-  assert.equal(kept.repositoriesEtag, '"r-new"')
+  const kept = adoptDomainState(memory, storedState({ marketEtag: '"m-old"' }), usable)
+  assert.equal(kept.marketEtag, '"m-new"')
   // A stored cut that answers a different config is not adopted at all…
   const skipped = adoptDomainState(initialDomainState, storedState({ marketSize: 50 }), usable)
   assert.equal(skipped.catalog, null)

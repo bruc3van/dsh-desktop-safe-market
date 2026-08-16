@@ -2,11 +2,11 @@
  * The market's durable domain: the reduced catalog and the ETags that let the
  * next read ask conditionally.
  *
- * Caching the reduction rather than the crawl is the point. The snapshot is
- * 2.4 MB and moves once a day; what the browser needs is the ~100 rows it was
- * reduced to. Keeping those on disk means a Host restart costs two 304s
- * instead of a full download, and a Host that cannot reach GitHub at all
- * still opens the market with the last catalog it saw.
+ * Caching the parsed catalog rather than the published file is the point. The
+ * published market is small and moves at most once a day; what the browser
+ * needs is its own cut of it. Keeping that cut on disk means a Host restart
+ * costs one 304 instead of a download, and a Host that cannot reach GitHub at
+ * all still opens the market with the last catalog it saw.
  */
 import { z } from 'zod'
 import { defineDomain } from '@deepseek-ai/dsh-storage-domain'
@@ -23,10 +23,8 @@ export const pendingUninstallState = z.object({
 export const safeMarketDomainState = z.object({
   /** The last reduction, or null before the first successful read. */
   catalog: z.union([marketCatalogSchema, z.null()]),
-  /** ETag of `repositories.json` when the catalog was derived. */
-  repositoriesEtag: z.string(),
-  /** ETag of `curated.json` when the catalog was derived. */
-  curatedEtag: z.string(),
+  /** ETag of `market.json` when the catalog was derived. */
+  marketEtag: z.string(),
   /**
    * The market size the catalog was reduced with. A deployment that changes
    * `marketSize` must not keep serving a list cut to the old number.
@@ -53,8 +51,7 @@ export type SafeMarketDomainState = z.infer<typeof safeMarketDomainState>
  */
 export const initialDomainState: SafeMarketDomainState = {
   catalog: null,
-  repositoriesEtag: '',
-  curatedEtag: '',
+  marketEtag: '',
   marketSize: 1,
   catalogBase: '',
   pendingUninstall: [],
@@ -101,8 +98,7 @@ export function adoptDomainState(
   return {
     ...next,
     catalog: stored.catalog,
-    repositoriesEtag: stored.repositoriesEtag,
-    curatedEtag: stored.curatedEtag,
+    marketEtag: stored.marketEtag,
     marketSize: stored.marketSize,
     catalogBase: stored.catalogBase,
   }

@@ -55,7 +55,7 @@ const DEFAULT_CATALOG_BASE = 'https://raw.githubusercontent.com/bruc3van/awesome
 
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
-  /** Base URL holding `repositories.json` and `curated.json`. */
+  /** Base URL holding `market.json`. */
   catalogBase: string
   /** How many plugins the market shows. */
   marketSize: number
@@ -74,7 +74,7 @@ export interface Config {
  */
 export const Config = z.object({
   catalogBase: z.string().default(DEFAULT_CATALOG_BASE),
-  marketSize: z.natural().min(1).default(100),
+  marketSize: z.natural().min(1).default(200),
   profile: z.string().default('web'),
 })
 
@@ -110,15 +110,14 @@ export function apply(ctx: Context, config?: Config): void {
   const cache: CatalogCache = {
     read: () => (
       usable(state)
-        ? { catalog: state.catalog, repositoriesEtag: state.repositoriesEtag, curatedEtag: state.curatedEtag }
-        : { catalog: null, repositoriesEtag: '', curatedEtag: '' }
+        ? { catalog: state.catalog, marketEtag: state.marketEtag }
+        : { catalog: null, marketEtag: '' }
     ),
     write: (next) => {
       state = {
         ...state,
         catalog: next.catalog,
-        repositoriesEtag: next.repositoriesEtag,
-        curatedEtag: next.curatedEtag,
+        marketEtag: next.marketEtag,
         marketSize: resolved.marketSize,
         catalogBase: resolved.catalogBase,
       }
