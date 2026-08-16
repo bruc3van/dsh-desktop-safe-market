@@ -109,6 +109,7 @@ tarball 优先用最新 release tag，没有就用默认分支 {branch}。装完
   'installed.uninstalled': '已卸载 {name}，重启后完成清理。',
   'installed.actionFailed': '操作失败：{reason}',
   'installed.readFailed': '该包无法读取：{reason}',
+  'installed.heldDown': '本会话中卸载过该插件，残留的停用行把它按住了——点「启用」即可恢复。',
 
   'skills.title': '当前会话可用的技能',
   'skills.body': '这里列出当前会话能解析到的全部技能。技能发现按会话所属的 Agent 预设分层，所以这份列表就是该会话实际可用的那份。读取不需要开启市场，也不会联网。',
@@ -215,6 +216,7 @@ Prefer the latest release tag's tarball, falling back to the default branch {bra
   'installed.uninstalled': '{name} uninstalled — a restart finishes the cleanup.',
   'installed.actionFailed': 'The action failed: {reason}',
   'installed.readFailed': 'This package could not be read: {reason}',
+  'installed.heldDown': 'This plugin was uninstalled earlier this session; leftover stop rows are holding it down — Enable will clear them.',
 
   'skills.title': 'Skills this session can resolve',
   'skills.body': 'Every skill the current session resolves. Discovery is layered by the agent preset a session runs, so this is the list that session actually has. Reading it needs no marketplace and no network.',

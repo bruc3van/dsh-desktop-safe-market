@@ -126,17 +126,14 @@ export function apply(ctx: Context, config?: Config): void {
   }
 
   // The installed panel's manager: profile files for the durable half, the
-  // live Loader for the now half. Its pending-uninstall record rides the same
-  // domain state as the catalog cache.
+  // live Loader for the now half. Its pending-uninstall record lives in a
+  // small file under the harness home — deliberately NOT in the storage
+  // domain — so the boot sweep runs even when the domain is unavailable:
+  // losing the record is what strands stop rows in the user's patch file.
   const installed = createInstalledManager({
     profile: resolved.profile,
     selfName: name,
     loader: ctx.loader,
-    readPending: () => state.pendingUninstall,
-    writePending: (next) => {
-      state = { ...state, pendingUninstall: next.map(record => ({ ...record, entryIds: [...record.entryIds] })) }
-      persist?.(state)
-    },
   })
 
   ctx.effect(async () => {
@@ -158,6 +155,15 @@ export function apply(ctx: Context, config?: Config): void {
         // flush it now instead of losing it until the next refresh.
         persist(state)
       }
+      // A pending-uninstall record an older build kept in the domain store:
+      // seed the file seat so this boot's sweep still takes its rows back,
+      // then forget the field — the file is the seat from now on.
+      const legacy = state.pendingUninstall
+      if (legacy.length > 0) {
+        await installed.adoptPending(legacy)
+        state = { ...state, pendingUninstall: [] }
+        persist?.(state)
+      }
       // Take back last session's uninstall stop rows before serving: the
       // composition no longer carries their targets (or a reinstall wants
       // them gone), and the user's patch file should not keep our litter.
@@ -171,6 +177,9 @@ export function apply(ctx: Context, config?: Config): void {
       // with it: the catalog and the skills page still run from memory, and
       // the next successful read simply cannot survive the restart.
       console.warn('[dsh-desktop-safe-market] catalog cache unavailable, running memory-only:', error)
+      // The pending-uninstall seat is a file, not this domain: the sweep still
+      // runs and takes last session's stop rows back out of the patch layer.
+      await installed.sweep()
       return () => { persist = undefined }
     }
   }, 'dsh-desktop-safe-market: catalog cache')

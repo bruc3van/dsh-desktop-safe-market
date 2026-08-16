@@ -18,14 +18,17 @@
  *   never composes it), stops its entries for the rest of this session with
  *   the same disable-row mechanism — which also keeps a mid-session
  *   patch-file recompose from reviving them — and records the rows it wrote
- *   so the next boot's {@link InstalledManager.sweep} can take them back out
- *   of the user's file once the entries they target no longer exist.
+ *   (a small file seat under the harness home, independent of the storage
+ *   domain) so the next boot's {@link InstalledManager.sweep} can take them
+ *   back out of the user's file once the entries they target no longer
+ *   exist.
  *
  * Nothing here spawns a process or touches the network: every effect is a
  * local file edit plus an in-process Loader call.
  */
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
-import { join } from 'node:path'
+import { mkdir, readFile } from 'node:fs/promises'
+import { dirname, join } from 'node:path'
 import type {
   MarketInstalledEntry,
   MarketInstalledPackage,
@@ -33,9 +36,11 @@ import type {
 } from './contract.ts'
 import {
   PROFILE_PATCH_FILENAME,
+  atomicWrite,
   readBundleInfo,
   readManifest,
   removeBundle,
+  resolveDshHome,
   resolveProfileDir,
   setEntryDisabled,
   userBundles,
@@ -63,9 +68,13 @@ export interface InstalledManagerOptions {
   readonly loader: Loader
   /** Harness home override; defaults to the environment's resolution. */
   readonly home?: string
-  /** Durable pending-uninstall record (the storage domain's seat). */
-  readonly readPending: () => readonly PendingUninstall[]
-  readonly writePending: (next: readonly PendingUninstall[]) => void
+  /**
+   * The pending-uninstall seat file: one small JSON array per profile under
+   * the harness home (see {@link pendingFilePath}). A file, not the storage
+   * domain, so the boot sweep still runs when the domain is unavailable —
+   * losing the record is what strands stop rows in the user's patch file.
+   */
+  readonly pendingFile?: string
 }
 
 /** The manager face the Remote service delegates to. */
@@ -75,10 +84,67 @@ export interface InstalledManager {
   uninstall(packageName: string): Promise<MarketInstalledResult>
   /** Take back disable rows of finished uninstalls; run once at plugin start. */
   sweep(): Promise<void>
+  /**
+   * Seed the file seat from a record an older version kept in the storage
+   * domain (one-time migration). The file wins when it already holds
+   * records; the caller then forgets the legacy field.
+   */
+  adoptPending(records: readonly PendingUninstall[]): Promise<void>
 }
 
 function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
+}
+
+/** The harness-home directory holding every pending-uninstall seat. */
+const PENDING_DIR = 'dsh-desktop-safe-market'
+
+/**
+ * The pending-uninstall seat for one profile: a small JSON file under the
+ * harness home (`$DSH_HOME` or `~/.dsh`), owned by this plugin and per
+ * profile — a sweep must only ever touch its own profile's rows. Profile
+ * names are validated (no separators) before they reach this path.
+ */
+export function pendingFilePath(profile: string, home: string = resolveDshHome()): string {
+  return join(home, PENDING_DIR, 'pending-' + profile + '.json')
+}
+
+/**
+ * Read a pending-uninstall seat. A missing seat is an empty list; an
+ * unreadable or corrupt one is too — but loudly, because a lost record is
+ * what strands stop rows in the user's patch file (they then hold a
+ * reinstall down until someone notices).
+ */
+async function readPendingFile(file: string): Promise<PendingUninstall[]> {
+  let content: string
+  try {
+    content = await readFile(file, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return []
+    console.warn('[dsh-desktop-safe-market] pending-uninstall seat unreadable:', file, messageOf(error))
+    return []
+  }
+  try {
+    const parsed: unknown = JSON.parse(content)
+    if (!Array.isArray(parsed)) throw new TypeError('seat does not hold an array')
+    return parsed
+      .filter(row => row !== null && typeof row === 'object' && !Array.isArray(row))
+      .map(row => ({
+        packageName: String((row as { packageName?: unknown }).packageName ?? ''),
+        entryIds: (Array.isArray((row as { entryIds?: unknown }).entryIds) ? (row as { entryIds: unknown[] }).entryIds : [])
+          .map(id => String(id)),
+        at: String((row as { at?: unknown }).at ?? ''),
+      }))
+  } catch (error) {
+    console.warn('[dsh-desktop-safe-market] pending-uninstall seat corrupt, treating as empty:', file, messageOf(error))
+    return []
+  }
+}
+
+/** Write a pending-uninstall seat (atomic, directory created on demand). */
+async function writePendingFile(file: string, next: readonly PendingUninstall[]): Promise<void> {
+  await mkdir(dirname(file), { recursive: true })
+  await atomicWrite(file, JSON.stringify(next, undefined, 2) + '\n')
 }
 
 /**
@@ -88,6 +154,9 @@ function messageOf(error: unknown): string {
 export function createInstalledManager(options: InstalledManagerOptions): InstalledManager {
   const profileDir = resolveProfileDir(options.profile, options.home)
   const patchPath = join(profileDir, PROFILE_PATCH_FILENAME)
+  const pendingPath = options.pendingFile ?? pendingFilePath(options.profile, options.home ?? resolveDshHome())
+  const readPending = (): Promise<PendingUninstall[]> => readPendingFile(pendingPath)
+  const writePending = (next: readonly PendingUninstall[]): Promise<void> => writePendingFile(pendingPath, next)
 
   /** The live entry map, keyed by the ids the Loader reports (`include:<id>` for composed rows). */
   const liveEntries = (): Map<string, Entry> => {
@@ -145,6 +214,12 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     } catch (error) {
       return { packages: [], profile: options.profile, error: messageOf(error) }
     }
+    // A record for a package that is back in the manifest means a same-session
+    // uninstall's stop rows are still holding it down (the boot sweep has not
+    // run yet): surface it so the panel can explain the disabled state.
+    const pending = await readPending()
+    const heldDown = (packageName: string): boolean =>
+      pending.some(record => record.packageName === packageName && record.entryIds.length > 0)
     const live = liveEntries()
     const packages: MarketInstalledPackage[] = []
     for (const packageName of bundles) {
@@ -169,12 +244,13 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
           enabled: entries.some(entry => entry.enabled),
           entries,
           error: '',
+          heldDown: heldDown(packageName),
         })
       } catch (error) {
         // A bundle whose package vanished from node_modules is still an
         // install fact: list it, say why it cannot be read, and let the user
         // uninstall the residue.
-        packages.push({ packageName, version: '', description: '', self, enabled: false, entries: [], error: messageOf(error) })
+        packages.push({ packageName, version: '', description: '', self, enabled: false, entries: [], error: messageOf(error), heldDown: heldDown(packageName) })
       }
     }
     return { packages, profile: options.profile, error: '' }
@@ -195,6 +271,14 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     // still converges at the next recompose or boot).
     await setEntryDisabled(patchPath, ids, !enabled)
     await applyLive(ids, enabled)
+    // Whatever rows the patch layer now carries say what the user just asked
+    // for, so a same-session uninstall's stop rows for this package are no
+    // longer ours: an enable removed them, a deliberate disable is the user's
+    // own and the boot sweep must not take it back. Drop the record. (A
+    // failure here fails the verb: leaving the record would let the next
+    // boot's sweep undo a disable the user just asked for, and the retry is
+    // idempotent — the rows and the live nudge have already landed.)
+    await writePending((await readPending()).filter(record => record.packageName !== packageName))
     return await list()
   }
 
@@ -210,8 +294,12 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     // The manifest is the authoritative fact of an uninstall: once it is
     // written, the next boot never composes the bundle, so every later step
     // is a best-effort session nicety rather than something worth failing
-    // the verb (and blocking a retry) over.
+    // the verb (and blocking a retry) over. But "best-effort" is not
+    // "silent": a stop that cannot land means the plugin keeps running this
+    // session, and a plugin whose selling point is review-before-install
+    // should say so — the result notice carries every fault.
     await writeManifest(profileDir, manifest)
+    const stopFaults: string[] = []
     if (!self && ids.length > 0) {
       // Stop the entries for the rest of this session and keep them stopped
       // across mid-session recomposes (the bundle's insert rows stay in the
@@ -224,36 +312,62 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
         await setEntryDisabled(patchPath, ids, true)
         rowsWritten = true
       } catch (error) {
+        stopFaults.push('stop rows: ' + messageOf(error))
         console.warn('[dsh-desktop-safe-market] uninstall stop rows failed:', error)
       }
       if (rowsWritten) {
-        const pending = options.readPending().filter(record => record.packageName !== packageName)
-        options.writePending([...pending, { packageName, entryIds: ids, at: new Date().toISOString() }])
+        try {
+          const pending = (await readPending()).filter(record => record.packageName !== packageName)
+          await writePending([...pending, { packageName, entryIds: ids, at: new Date().toISOString() }])
+        } catch (error) {
+          // Orphan rows — a record the boot sweep can never find — would hold
+          // a reinstall down forever; the notice names the fault.
+          stopFaults.push('sweep record: ' + messageOf(error))
+          console.warn('[dsh-desktop-safe-market] uninstall sweep record failed:', error)
+        }
       }
-      await applyLive(ids, false).catch(() => {
+      try {
+        await applyLive(ids, false)
+      } catch (error) {
         // Stopping now is best-effort: the disable rows already hold the
         // entries down, and the manifest edit finishes the uninstall on boot.
-      })
+        stopFaults.push('live stop: ' + messageOf(error))
+      }
     }
     // Self-uninstall edits the manifest only: this fiber is the one answering
     // the call, and the bundle layer simply never composes on the next boot.
-    return await list()
+    const result = await list()
+    if (stopFaults.length === 0) return result
+    return {
+      ...result,
+      notice: packageName + ' is removed from the profile but may keep running until the next restart (' + stopFaults.join('; ') + ')',
+    }
   }
 
   async function sweep(): Promise<void> {
-    const pending = options.readPending()
+    // The seat is a file precisely so a broken storage domain cannot strand
+    // the rows; readPendingFile itself never rejects (it degrades to [] with
+    // a warning), and a failed edit keeps the record for the next boot.
+    const pending = await readPending()
     if (pending.length === 0) return
     try {
       // The record's whole job was bridging the uninstalling session: whether
       // the composition now lacks the entries (uninstall finished) or has
       // them again (reinstall — the rows would wrongly keep it down), the
-      // rows come out and the record clears. A failed edit keeps the record
-      // so the next boot retries.
+      // rows come out and the record clears.
       await setEntryDisabled(patchPath, [...new Set(pending.flatMap(record => [...record.entryIds]))], false)
-      options.writePending([])
+      await writePending([])
     } catch (error) {
       console.warn('[dsh-desktop-safe-market] uninstall sweep failed:', error)
     }
+  }
+
+  async function adoptPending(records: readonly PendingUninstall[]): Promise<void> {
+    if (records.length === 0) return
+    // The file wins: a seat that already holds records was written by the
+    // current build, and the domain copy is older.
+    if ((await readPending()).length > 0) return
+    await writePending(records)
   }
 
   return {
@@ -261,5 +375,6 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     setEnabled: (packageName: string, enabled: boolean) => serialize(() => setEnabled(packageName, enabled)),
     uninstall: (packageName: string) => serialize(() => uninstall(packageName)),
     sweep,
+    adoptPending,
   }
 }

@@ -126,7 +126,7 @@ export type ProfileManifest = Record<string, unknown> & {
 }
 
 /** Write a file atomically (tmp + rename), the include's own discipline. */
-async function atomicWrite(file: string, content: string): Promise<void> {
+export async function atomicWrite(file: string, content: string): Promise<void> {
   await writeFile(`${file}.tmp`, content, 'utf8')
   await rename(`${file}.tmp`, file)
 }
@@ -169,7 +169,7 @@ export function userBundles(manifest: ProfileManifest): string[] {
  */
 export function removeBundle(manifest: ProfileManifest, packageName: string): boolean {
   let changed = false
-  if (manifest.dependencies !== undefined && packageName in manifest.dependencies) {
+  if (manifest.dependencies !== undefined && Object.hasOwn(manifest.dependencies, packageName)) {
     delete manifest.dependencies[packageName]
     changed = true
   }

@@ -1,119 +1,143 @@
 # dsh-desktop-safe-market
 
-English | [中文](./README.zh.md)
+中文 | [English](./README_EN.md)
 
-A **review-before-install** extension marketplace for the DeepSeek Harness web GUI. It adds a **Marketplace** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
+一个**先审查、再安装**的 DeepSeek Harness 插件市场。它与「点一下就装」的普通市场刻意保持距离，差异集中在两件事：
 
-- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable (what shipped with DSH, and an in-box seat that is not a profile dependency, are not listed); below it, 200 community plugins balanced across categories. **Review and install** installs nothing: it opens a new session, stages a **security-review prompt** in the composer, and closes Settings, so an agent reads the code and only then runs the official install command.
-- **Skills** — what the current session can actually resolve.
+- **精选来源**：市场列表不是 GitHub topic 的原始抓取，而是 [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 每日快照管线的**人工精选**产物——蹭 topic 的非插件、归档/停用仓库在上游就被剔除，席位再按类目逐轮均衡发牌——你浏览的是一份经过编辑把关的短名单，而不是热度堆场。
+- **先审查再安装**：点「安全安装」不会装任何东西。它打开一个新会话、把一段**安全审查提示词**放进输入框，由 Agent 实际读仓库代码，确认干净后才执行官方安装命令。插件自身没有任何能执行安装的接口——审查与安装因此在结构上不可分割、绕不过去。
 
-![The marketplace tab](./assets/screenshots/market.png)
+使用上，它在设置里多一个**插件市场**导航项（挂市场自己的店面图标），分两页：
 
-## What it is for
+- **插件**：上方是**已安装面板**——列出当前 profile 通过包安装的插件及其运行状态，支持停用/启用和卸载（DSH 自带的、以及未写成 profile 依赖的 in-box 接入不在此列）；下方是精选市场，「全部插件」视图按 Star 数排名。
+- **技能**：列出当前会话实际能解析到的技能。
 
-Installing a plugin means running someone else's code on your machine. A catalog can tell you *which* plugins exist; it cannot tell you whether one is safe — and that is exactly what you are betting on at the moment you click install.
+![插件市场](./assets/screenshots/market.png)
 
-This plugin joins the two halves: a community shortlist that has **already had the non-plugins curated out**, and a **code review performed by an agent**. It downloads nothing, executes nothing, and judges nothing itself — it puts the request in front of you.
+## 它解决什么问题
 
-## Install
+装插件本质上是在自己的机器上运行别人写的代码。普通目录回答「有哪些插件」，然后把风险留给你的那一次点击；「这个插件安全吗」始终无人回答——而它恰恰是你点安装那一刻真正在赌的东西。
+
+这个插件把两件事接在一起：一份**已经过人工精选**的社区短名单，和一次**由 Agent 执行的代码审查**。它自己不下载、不执行、不判断，只把请求摆到你面前——这就是它与普通市场的全部差异：**入口是精选的，安装是带审查的。**
+
+## 安装
 
 ```sh
 dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.2.tar.gz
 ```
 
-The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
+也可以把安装这件事直接交给你的 Agent——复制这句提示词发过去即可：
 
-The browser, the CLI, and the desktop client share one profile, so the entry appears in all three.
-
-## You turn it on yourself
-
-The **market half** of the Plugins page ships **off**. Until you enable it, it is one card explaining what enabling does, and a button (the installed panel answers either way).
-
-That is deliberate: **enabling is what lets this machine read the catalog snapshot from GitHub**, and while it is off the plugin makes no network request at all. A plugin that arrives already reaching out has decided something on your behalf. The switch is the plugin's own durable setting — answer once and it stays answered.
-
-## What "Review and install" does
-
-1. connects a new session in the current session's workspace (or the most recently used one) and navigates there;
-2. **stages** the review prompt in the composer — it does not send it;
-3. closes Settings, so you are looking at the session it was staged in.
-
-The prompt asks the agent to read the repository rather than its README, and to look for credential or token access, data sent to third-party hosts, remote code execution or downloaded-and-executed payloads, install-time scripts (`postinstall` and friends), obfuscated sources with no matching original, and permissions far wider than the plugin claims. **Anything suspicious means stop, explain, and ask you.** A clean reading is followed by the official command:
-
-```sh
-dsh plugin --profile web add <the repository's tarball URL>
+```text
+帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.2.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
 ```
 
-preferring the latest release tag and falling back to the default branch (the catalog supplies the branch name). The prompt also says that dsh must be restarted before the plugin loads.
+这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
 
-Whether it is sent is your Enter key. With no workspace at all, the card says so and points you at the sidebar.
+浏览器、CLI 与桌面客户端共用同一个 profile，因此三处都会出现这个导航项。
 
-## The installed panel
+## 首次使用要手动开启
 
-The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry. Layers shipped with the DSH profile template, and an in-box seat that is not a profile dependency (how the desktop client offers this market), are not listed. Two actions:
+「插件」页的市场部分默认是**关闭**状态，只显示一张说明卡片和一个「启用插件市场」按钮（已安装面板不受开关影响，随时可见）。
 
-- **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
-- **Uninstall** removes the dependency and the `dsh.profile.bundles` layer from the profile's `package.json` (the next boot simply never composes it) and stops the plugin for the rest of the session; on the next boot the plugin takes those stop rows back out of your patch file. Files left in `node_modules` become inert and are pruned by the next `dsh plugin` command.
+这是刻意的：**开启才会让本机去 GitHub 读取目录快照**，关闭时插件不发起任何网络请求。一个装上就开始联网的插件，等于替你做了决定。开关是插件自己的持久化设置，开一次之后一直有效。
 
-By design it matches "review and install": **local file edits plus loader calls — no process spawned, no network**, and the panel reads only this machine's own facts, so it works with the market off.
+## 「安全安装」做了什么
 
-## The Skills page
+1. 在当前会话所属工作区（没有则用最近使用的工作区）连接一个新会话并跳转过去；
+2. 把审查提示词**填入输入框**——不发送；
+3. 关闭设置窗口，让你直接看到那个会话。
 
-Lists the skills the **current session** resolves — name, description, owning provider, and invocation policy (model-invocable, user-invocable via `/name`) — with search.
+提示词要求 Agent：实际读仓库代码而非只看 README，重点检查凭据/token 访问、向第三方外传数据、远程代码执行、`postinstall` 等安装脚本、无对应源码的混淆文件，以及权限是否远超其声称的功能；**发现可疑处必须停下来说明原因并询问你**；确认干净后用官方命令安装：
 
-Addressing it by session is required, not lazy: the skill registry is host+per-scope layered, and the web deployment **deliberately disables the host-plane `skill-filesystem` row** — local discovery belongs to each agent preset. A read from the plugin's root context sees the global layer alone and would report "no skills" to a user with plenty. With no session open, the page says there is no layer to read.
+```sh
+dsh plugin --profile web add <该仓库的 tarball 地址>
+```
 
-![The Skills page](./assets/screenshots/skills.png)
+tarball 优先取最新 release tag，没有 release 则退回默认分支（分支名来自目录数据）。提示词里也写明了装完需要重启 dsh 才会生效。
 
-## Where the data comes from
+发不发送由你按回车决定。没有任何工作区时，卡片会直接告诉你先去侧边栏选一个。
 
-The market reads a single published file, [`market.json`](https://github.com/bruc3van/awesome-dsh-plugin/blob/main/data/market.json), from [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin)'s daily snapshot pipeline. Every editorial decision happens upstream, where the crawl and the human curation live:
+## 已安装面板
 
-- the crawl of repositories tagged `dsh-plugin` (`repositories.json`) is filtered there — a description is required, archived/disabled repositories are dropped, and the exclusions in `curated.json` are applied;
-- rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every seat to two or three categories), but seats dealt round by round so every category places its best entry before any places its second, up to 300;
-- this plugin truncates that order to `marketSize` (default 200) and re-validates every row on the Host before the browser sees it.
+「插件」页顶部的**已安装面板**列出当前 profile 通过 `dsh plugin add` 装进来的插件包（同时写在 `dependencies` 与 `dsh.profile.bundles` 里的那些：版本、简介、每个 loader 条目的运行状态）。DSH 模板自带的层、以及桌面端按 in-box 接入、没有写成依赖的市场，都不在此列。提供两个动作：
 
-The wire protocol — field shapes, truncation limits, the branch-name whitelist, the ordering invariant, and the versioning rules — is documented in [docs/market-json-spec.md](docs/market-json-spec.md).
+- **停用/启用**：往 profile 自己的 `cordis.patch.yml`（用户补丁层）写入/移除一行 `- id: <条目> / disabled: true`，同时直接推动 loader 条目——**立即生效，无需重启**，重启后依旧有效。market 自己那行不提供停用按钮：停用市场会连带停掉唯一能再启用它的界面。
+- **卸载**：从 profile 的 `package.json` 里移除依赖与 `dsh.profile.bundles` 层（下次启动不再组装它），并在本会话内先停用；重启后由插件自动收回那几行停用标记。收尾记录存放在 harness home 里插件自己的小文件（不依赖市场缓存域，域坏了记录也丢不了）；若本会话内的停用步骤失败，卸载提示会明说「可能运行到下次重启」。同一会话内重装刚卸载的插件会被残留停用行按住，卡片会提示「点启用即可恢复」。留在 `node_modules` 里的文件会失效，下次任何 `dsh plugin` 命令会顺带清掉。
 
-## Configuration
+设计上与「安全安装」一致：**本地文件编辑 + loader 调用，不启动进程、不联网**；面板读的也是本机事实，所以市场开关关着它也照常工作。
 
-Override in `~/.dsh/profiles/web/cordis.patch.yml`:
+## 技能页
 
-| Field | Default | Meaning |
+列出**当前会话**能解析到的技能，含名称、说明、来源 provider 与调用策略（模型可调用 / 用户 `/名称` 可调用），可搜索。
+
+按会话寻址不是偷懒，是必须：技能注册表是「宿主 + 每作用域」分层的，而 web 部署**特意禁用了宿主平面的 `skill-filesystem`**——本地发现归各个 Agent 预设所有。从插件根上下文读只能看到全局层，会对着一堆技能报告「没有技能」。没有打开的会话时，页面直说没有可读的那一层。
+
+![技能页](./assets/screenshots/skills.png)
+
+## 数据来源
+
+市场只读 [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 每日快照管线发布的一个精选文件 [`market.json`](https://github.com/bruc3van/awesome-dsh-plugin/blob/main/data/market.json)，全部编辑决策都在上游（爬取与人工名单所在处）完成：
+
+- 上游对带 `dsh-plugin` 标签的爬取（`repositories.json`）做过滤：要求有简介、剔除归档/停用仓库、应用 `curated.json` 人工排除名单；
+- 分类与**均衡发牌**也在上游——不是纯按 star 排序（那样两三个分类就会吃掉几乎所有席位），而是每类先出最强、再出次强，至多 300 席；
+- 本插件按该顺序截断到 `marketSize`（默认 200），并在 Host 侧重校验每一行后才发给浏览器。
+
+接口协议——字段形状、截断上限、分支名白名单、顺序不变量与版本规则——见 [docs/market-json-spec.md](docs/market-json-spec.md)。
+
+## 配置
+
+在 `~/.dsh/profiles/web/cordis.patch.yml` 里覆盖：
+
+| 字段 | 默认值 | 说明 |
 | --- | --- | --- |
-| `catalogBase` | awesome-dsh-plugin's `data/` directory | Point the market at a mirror of the same file |
-| `marketSize` | `200` | How many plugins the market shows |
+| `catalogBase` | awesome-dsh-plugin 的 `data/` 目录 | 指向该文件的镜像 |
+| `marketSize` | `200` | 市场展示多少个插件 |
 
-## Security boundary
+## 安全边界
 
-- **The plugin runs no install command and exposes no interface that could** — review and install are therefore inseparable;
-- **the market file is fetched and re-validated on the Host** before the browser sees it — a curated list of at most 300 rows, not the 2.4 MB crawl — and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (one 304, or the last catalog when GitHub is unreachable);
-- **repository links are rebuilt from `owner/name`** rather than trusted from the file, so a poisoned file cannot contribute a URL scheme of its own — the wire codec enforces the rebuilt shape, not just a comment;
-- **the default branch is pattern-checked before it reaches the prompt** (`[A-Za-z0-9][A-Za-z0-9._/-]*` plus the git ref rules; anything else falls back to `main`), and the prompt declares both the URL and the branch as opaque marketplace literals — a poisoned branch name cannot inject instructions into the review;
-- every card renders as plain text;
-- while disabled, the Remote refuses — the catalog cannot be read around the switch;
-- the install hand-off runs entirely through published services (workspaces / sessions / conversation): it reads no DOM and sends no message;
-- the installed-panel verbs accept only **wire-codec-checked package names that are actually in the profile manifest**, and land as local file edits plus loader calls with no process spawned; edits to your patch layer preserve existing comments and hand-written rows.
+- **插件自身不执行任何安装命令**，也没有能执行它的接口——审查与安装因此不可分割；
+- **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选后的至多 300 行，而不是 2.4 MB 爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；连不上 GitHub 时用上次的目录）；
+- **仓库链接由 `owner/name` 重新拼装**，不采信文件里的地址，因此被投毒的文件无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
+- **默认分支名进提示词前经过模式校验**（`[A-Za-z0-9][A-Za-z0-9._/-]*` 加 git ref 规则，不合格一律回落 `main`），提示词同时声明 URL 与分支为市场提供的不透明字面量——被投毒的分支名无法向审查提示词注入指令；
+- 卡片全部以纯文本渲染；
+- 关闭状态下 Remote 接口直接拒绝，无法绕过开关读取目录；
+- 安装交接全程走官方公开服务（workspaces / sessions / conversation），不读 DOM、不发送消息；
+- 已安装面板的动词只接受**经 wire codec 校验且实际在 profile 清单里的包名**，动作落地为本机文件编辑与 loader 调用，不启动进程；写入用户补丁层时保留原有注释与手工行。
 
-**Being listed is not a safety endorsement.** The agent's review is an informed second opinion, not a verdict — read it yourself before deciding.
+**收录不代表安全背书。** Agent 的审查是一次有依据的辅助判断，不是结论——请自己看过再决定。
 
-## Known limitations
+## 已知限制
 
-- **Skills are read-only for now.** The Skills page answers "what do I have". Skills are distributed as filesystem directories rather than npm packages, so installing them is the next step.
-- **It does not audit what you already installed.** The installed panel views, disables, and uninstalls, but it does not re-review code that is already running — the before-install review is still the gate.
-- **The market does not run the install itself.** The command lives in the prompt and the agent runs it, which is what makes the review impossible to skip — at the cost of no progress display inside the market.
-- **The nav icon is a skin-level swap.** The settings shell hardcodes section nav icons by id (unknown ids get the gear) and the slot contract has no icon seat; this plugin finds its own labeled row and re-skins the icon. If the shell restructures, the worst case is the gear returning — nothing functional breaks.
+- **只读技能，还不能装技能**：技能页目前只回答「我有什么」。技能的分发形态与插件不同（文件系统目录而非 npm 包），装技能是下一步。
+- **不体检已安装插件**：已安装面板能查看、停用、卸载，但不重新审计已经装上的代码——「装之前」的审查仍然不可省。
+- **市场自己不执行安装**：命令写在提示词里由 Agent 执行，所以审查与安装绑在一起、绕不过去；代价是市场里看不到安装进度。
+- **导航图标是皮肤级的替换**：设置壳按 section id 硬编码导航图标（未知 id 一律齿轮），slot 契约没有图标位。本插件按自己的导航文案找到对应行并替换图标，壳结构变化时最坏退回齿轮，不影响功能。
 
-## Development
+## 开发
 
 ```sh
 pnpm install --ignore-workspace
 pnpm run typecheck
-pnpm test          # node --test, the catalog reduction and reader regressions
-pnpm run build     # lib/index.js (Host ESM), lib/client.js (browser, ModuleLoader-wrapped), lib/types
+pnpm test          # node --test，目录归约与读取器的回归测试
+pnpm run build     # lib/index.js（Host，ESM）、lib/client.js（浏览器，ModuleLoader 包裹）、lib/types
 ```
 
-`devDependencies` are pinned to the published `@deepseek-ai/*` versions the runtime actually loads; every `peerDependency` is optional and supplied by the profile's node_modules.
+发版时版本号有几个座位要一起动：`package.json`、`dsh.plugin.json`，以及两份 README 里的 tarball 地址（安装命令与 Agent 提示词各一处）。`pnpm test` 里的版本门禁（`test/version.test.ts`）会逐一核对，CI（`.github/workflows/check.yml`）在每次推送与 PR 上跑同一套检查。
 
-## License
+`devDependencies` 固定在与运行时一致的 `@deepseek-ai/*` 已发布版本上；`peerDependencies` 全部可选，实际由 profile 的 node_modules 提供。
+
+## 相关项目
+
+**作者维护**
+
+- **[dsh-desktop](https://github.com/bruc3van/dsh-desktop)**——让 Agent 安全常驻桌面的独立 DeepSeek Harness 客户端：官方 Web UI 原封不动，长任务常驻托盘，精选插件先审查、再安装。（本市场在桌面端即以 in-box 方式内置。）
+- **[awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin)**——用 30 秒为你的 DeepSeek Harness 找到合适的插件。这不是又一个仓库清单：GitHub 上所有打着 `dsh-plugin` 标签的仓库由脚本每天自动抓取，再经人工逐个核实——真插件进目录，蹭热度的进黑名单，每条剔除理由公开可查；并告诉你每个插件适合谁、从哪里开始。（也是本市场的数据来源。）
+
+**官方仓库**
+
+- **[deepseek-harness](https://github.com/deepseek-ai/deepseek-harness)**——DeepSeek Harness: Everything is a Plugin. 官方 `dsh` 与 Web UI 的上游项目——本插件是其插件体系上的第三方市场，市场里的每个插件最终都装进它的 profile、跑在它之上。
+
+## 许可证
 
 MIT

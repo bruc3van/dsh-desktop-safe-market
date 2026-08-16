@@ -21,6 +21,9 @@ CATALOG.md / TOP200.md 与人工分析）；不引入除 GitHub raw 之外的分
 - 路径：仓库内 `data/market.json`，随 main 分支发布，消费端经
   `https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data/market.json` 读取
   （消费端配置 `catalogBase` 指向该 `data/` 目录）。
+- 预览页：发布方同步生成根目录 `MARKET.md`——`market.json` 的人类可读镜像（中英双语、
+  按 Star 数排名的表格），随 `market.json` 一起重建与提交，供在 GitHub 上直接预览市场
+  内容而无需安装下游插件；它不属于消费接口，消费端忽略它。
 - 编码：UTF-8，JSON minified（单行 + 末尾换行），不落 `null` 字段——可省略的字段直接
   不写。
 - 体积上限：**500 KB**；条目数：**1–300**（发牌算法的输出上限 300，见 §5）。
@@ -121,7 +124,8 @@ trim，再按码点截断到上限；截断时以 `…` 结尾，且不得切在
    - `entries` 按发牌先后排列，**不重排**。发牌顺序保证任何前缀都是"每类先出最强、
      再出次强"的平衡名单——下游在这个顺序上截断到它配置的 `marketSize`（默认 200）。
 5. **写出**：minified JSON 写入 `data/market.json`，同时把 `pool_count`（第 1 步之后、
-   第 4 步之前的条数）写进信封。
+   第 4 步之前的条数）写进信封；并把同一信封渲染为根目录 `MARKET.md` 预览页（见 §2，
+   仅渲染已发布内容，熔断中止时不动它）。
 
 ## 5. 顺序不变量（CI 可校验）
 

@@ -88,6 +88,7 @@ export declare const zh: {
     readonly 'installed.uninstalled': "已卸载 {name}，重启后完成清理。";
     readonly 'installed.actionFailed': "操作失败：{reason}";
     readonly 'installed.readFailed': "该包无法读取：{reason}";
+    readonly 'installed.heldDown': "本会话中卸载过该插件，残留的停用行把它按住了——点「启用」即可恢复。";
     readonly 'skills.title': "当前会话可用的技能";
     readonly 'skills.body': "这里列出当前会话能解析到的全部技能。技能发现按会话所属的 Agent 预设分层，所以这份列表就是该会话实际可用的那份。读取不需要开启市场，也不会联网。";
     readonly 'skills.noSession': "请先打开一个会话——技能按会话所属的 Agent 预设分层解析，没有会话就没有可读的那一层。";

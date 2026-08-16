@@ -1,0 +1,35 @@
+name: Check
+
+# The version gate lives in test/version.test.ts: the READMEs hardcode the
+# release tarball URL (the install command plus the copyable agent prompt),
+# so a version bump must move package.json, dsh.plugin.json, and both READMEs
+# together — pnpm test fails on any drift. This workflow is the CI seat for
+# the whole `check` script (typecheck, tests, build).
+
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      # Node 24 LTS: the test suite is type-stripped TS run directly by
+      # node --test, which needs a Node with type stripping on by default.
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install dependencies
+        run: pnpm install --ignore-workspace
+      - name: Typecheck, test, build
+        run: pnpm run check

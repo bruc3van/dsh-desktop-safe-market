@@ -51,6 +51,8 @@ export type ProfileManifest = Record<string, unknown> & {
         };
     };
 };
+/** Write a file atomically (tmp + rename), the include's own discipline. */
+export declare function atomicWrite(file: string, content: string): Promise<void>;
 /** Read and parse the profile manifest. */
 export declare function readManifest(profileDir: string): Promise<ProfileManifest>;
 /** Write the manifest back (2-space JSON, trailing newline, atomic). */

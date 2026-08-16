@@ -33,9 +33,10 @@ export const safeMarketDomainState = z.object({
   /** The catalog base the reduction came from, for the same reason. */
   catalogBase: z.string(),
   /**
-   * Uninstalls whose `disabled: true` rows the next boot's sweep takes back
-   * out of the user's patch file. Defaulted so a store written before this
-   * field existed still parses (and keeps the catalog cache) at version 1.
+   * LEGACY — the pending-uninstall record an older build kept here. The
+   * current build reads it once at boot to seed the file-backed seat (see
+   * installed.ts) and then clears the field; it stays in the schema so a
+   * store written before the move still parses and its record is not lost.
    */
   pendingUninstall: z.array(pendingUninstallState).default([]),
 })

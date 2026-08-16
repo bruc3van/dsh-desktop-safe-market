@@ -244,7 +244,10 @@ function useInstalled({ t, listInstalled, setInstalledEnabled, uninstallInstalle
     void uninstallInstalled(item.packageName).then((result) => {
       if (!mounted.current) return
       setBusy(null)
-      setNotice(t('installed.uninstalled', { name: item.packageName }))
+      // The host may have an outcome line of its own (e.g. the in-session
+      // stop failed and the plugin runs until the next restart) — prefer it
+      // over the default success copy.
+      setNotice(result.notice !== undefined && result.notice !== '' ? result.notice : t('installed.uninstalled', { name: item.packageName }))
       setState({ status: 'ready', result })
     }, (error: unknown) => {
       if (!mounted.current) return
@@ -297,6 +300,8 @@ function InstalledCard({ t, item, installed }: {
       </p>
       {item.description !== '' && <p className="dsh_market_desc">{item.description}</p>}
       {item.error !== '' && <p className="dsh_market_cardError">{t('installed.readFailed', { reason: item.error })}</p>}
+      {item.heldDown && item.entries.length > 0
+        && <p className="dsh_market_cardNotice">{t('installed.heldDown')}</p>}
       <div className="dsh_market_foot">
         {confirming === item.packageName
           ? (
@@ -486,7 +491,13 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   const catalog = state.status === 'ready' ? state.catalog : null
   const shown = catalog === null
     ? []
-    : catalog.items.filter(item => matches(item, query.trim().toLocaleLowerCase(), category, english))
+    : catalog.items
+      .filter(item => matches(item, query.trim().toLocaleLowerCase(), category, english))
+      // The All view answers "what the community uses", so it ranks by stars;
+      // a category chip keeps the publisher's order, whose front rows are its
+      // own picks. `filter` copies, so the sort cannot reorder the catalog
+      // the other views read.
+      .sort((a, b) => (category === '' ? b.stars - a.stars : 0))
 
   const pickWorkspace = (): void => {
     setChoosing(true)

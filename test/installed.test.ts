@@ -89,41 +89,46 @@ function stubLoader(rows: { id: string; name?: string; disabled?: boolean; fiber
   }
 }
 
-/** A pending-record seat over a plain variable. */
-function pendingSeat(initial: PendingUninstall[] = []) {
-  let value = initial
-  return {
-    read: () => value,
-    write: (next: readonly PendingUninstall[]) => { value = [...next] },
-    get: () => value,
+/** The pending-seat file path for the fixture's `web` profile. */
+const pendingFile = (home: string): string => join(home, 'dsh-desktop-safe-market', 'pending-web.json')
+
+/** Read the fixture's pending seat (a missing or corrupt seat is empty). */
+async function readPending(home: string): Promise<PendingUninstall[]> {
+  try {
+    const parsed: unknown = JSON.parse(await readFile(pendingFile(home), 'utf8'))
+    return Array.isArray(parsed) ? parsed as PendingUninstall[] : []
+  } catch {
+    return []
   }
 }
 
+/** Write the fixture's pending seat. */
+async function writePending(home: string, next: PendingUninstall[]): Promise<void> {
+  await mkdir(join(home, 'dsh-desktop-safe-market'), { recursive: true })
+  await writeFile(pendingFile(home), JSON.stringify(next, undefined, 2) + '\n')
+}
+
 /** The manager over a fixture home, with the given loader stub. */
-async function manager(home: string, loader: Loader, pending = pendingSeat()) {
+async function manager(home: string, loader: Loader) {
   return {
     manager: createInstalledManager({
       profile: 'web',
       selfName: 'dsh-desktop-safe-market',
       loader,
       home,
-      readPending: pending.read,
-      writePending: pending.write,
+      pendingFile: pendingFile(home),
     }),
-    pending,
   }
 }
 
-/** The manager over a fixture home, with its own pending seat. */
+/** The manager over a fixture home. */
 function makeManager(home: string, loader: Loader) {
-  const pending = pendingSeat()
   return createInstalledManager({
     profile: 'web',
     selfName: 'dsh-desktop-safe-market',
     loader,
     home,
-    readPending: pending.read,
-    writePending: pending.write,
+    pendingFile: pendingFile(home),
   })
 }
 
@@ -338,6 +343,82 @@ test('list and uninstall ignore an in-box seat that is not a dependency', async 
   }
 })
 
+test('a same-session reinstall is flagged heldDown and Enable clears the rows', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    // The record a same-session uninstall left, before its boot sweep.
+    await writePending(home, [{ packageName: 'demo-plugin', entryIds: ['demo-plugin'], at: '2026-01-01T00:00:00Z' }])
+    const seat = stubLoader([{ id: 'include:demo-plugin', name: 'demo-plugin', disabled: true, fiberState: 2 }])
+    const built = makeManager(home, seat.loader)
+    const listed = await built.list()
+    assert.equal(listed.packages.length, 1)
+    assert.equal(listed.packages[0]!.heldDown, true, 'the list flags the held-down package')
+    // The ordinary Enable verb clears the leftover rows and the record.
+    const after = await built.setEnabled('demo-plugin', true)
+    assert.equal(after.packages[0]!.heldDown, false)
+    assert.deepEqual(await readPending(home), [], 'the record is gone with the rows')
+    assert.equal((await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8')).includes('disabled'), false)
+    assert.deepEqual(seat.updates, [{ id: 'include:demo-plugin', options: { disabled: null } }])
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a deliberate disable takes the rows back from the boot sweep', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    await writePending(home, [{ packageName: 'demo-plugin', entryIds: ['demo-plugin'], at: '2026-01-01T00:00:00Z' }])
+    const seat = stubLoader([{ id: 'include:demo-plugin', name: 'demo-plugin', fiberState: 2 }])
+    const built = makeManager(home, seat.loader)
+    await built.setEnabled('demo-plugin', false)
+    // The rows now say what the user asked for — the boot sweep must not
+    // take them back, so the record is gone.
+    assert.deepEqual(await readPending(home), [])
+    assert.match(await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8'), /- id: demo-plugin\n  disabled: true/)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('adoptPending seeds the file seat from a legacy domain record once', async () => {
+  const { home } = await makeHome()
+  try {
+    const built = makeManager(home, stubLoader([]).loader)
+    const legacy: PendingUninstall[] = [{ packageName: 'demo-plugin', entryIds: ['demo-plugin'], at: '2026-01-01T00:00:00Z' }]
+    await built.adoptPending(legacy)
+    assert.deepEqual(await readPending(home), legacy)
+    // A seat that already holds records wins over the domain copy.
+    await built.adoptPending([{ packageName: 'other', entryIds: ['other'], at: '2026-01-02T00:00:00Z' }])
+    assert.deepEqual(await readPending(home), legacy)
+    // An empty record is a no-op.
+    await built.adoptPending([])
+    assert.deepEqual(await readPending(home), legacy)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a corrupt seat file degrades to an empty list without failing the verbs', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    await mkdir(join(home, 'dsh-desktop-safe-market'), { recursive: true })
+    await writeFile(pendingFile(home), '{ not json\n')
+    const seat = stubLoader([{ id: 'include:demo-plugin', name: 'demo-plugin', fiberState: 2 }])
+    const built = makeManager(home, seat.loader)
+    const listed = await built.list()
+    assert.equal(listed.packages[0]!.heldDown, false)
+    const result = await built.uninstall('demo-plugin')
+    assert.equal(result.packages.length, 0)
+    // The new record lands even though the old content was corrupt.
+    assert.deepEqual((await readPending(home)).map(record => record.packageName), ['demo-plugin'])
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
 test('setEnabled refuses unknown packages and its own row', async () => {
   const { home, profileDir } = await makeHome()
   try {
@@ -362,28 +443,27 @@ test('uninstall edits the manifest, records the rows, and stops the entries', as
   try {
     await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
     const seat = stubLoader([{ id: 'include:demo-plugin', name: 'demo-plugin', fiberState: 2 }])
-    const pending = pendingSeat()
     const built = createInstalledManager({
       profile: 'web',
       selfName: 'dsh-desktop-safe-market',
       loader: seat.loader,
       home,
-      readPending: pending.read,
-      writePending: pending.write,
+      pendingFile: pendingFile(home),
     })
     const result = await built.uninstall('demo-plugin')
     assert.equal(result.packages.length, 0, 'the package is gone from the list')
+    assert.equal(result.notice, undefined, 'a clean uninstall has no outcome notice')
     const manifest = await readManifest(profileDir)
     assert.deepEqual(manifest.dsh!.profile!.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
     assert.equal('demo-plugin' in (manifest.dependencies ?? {}), false)
     assert.match(await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8'), /- id: demo-plugin\n  disabled: true/)
-    assert.deepEqual(pending.get().map(record => record.entryIds), [['demo-plugin']])
+    assert.deepEqual((await readPending(home)).map(record => record.entryIds), [['demo-plugin']])
     assert.deepEqual(seat.updates, [{ id: 'include:demo-plugin', options: { disabled: true } }])
 
     // The next boot's sweep takes the rows back and clears the record.
     await built.sweep()
     assert.equal((await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8')).includes('disabled'), false)
-    assert.deepEqual(pending.get(), [])
+    assert.deepEqual(await readPending(home), [])
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -398,17 +478,15 @@ test('uninstall of self edits the manifest only', async () => {
     manifest.dependencies!['dsh-desktop-safe-market'] = '^0.2.0'
     await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, undefined, 2) + '\n')
     const seat = stubLoader([{ id: 'include:dsh-desktop-safe-market', fiberState: 2 }])
-    const pending = pendingSeat()
     const built = createInstalledManager({
       profile: 'web',
       selfName: 'dsh-desktop-safe-market',
       loader: seat.loader,
       home,
-      readPending: pending.read,
-      writePending: pending.write,
+      pendingFile: pendingFile(home),
     })
     await built.uninstall('dsh-desktop-safe-market')
-    assert.deepEqual(pending.get(), [])
+    assert.deepEqual(await readPending(home), [])
     assert.deepEqual(seat.updates, [])
     assert.equal((await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8')).includes('disabled'), false)
     const after = await readManifest(profileDir)
@@ -422,20 +500,19 @@ test('uninstall of self edits the manifest only', async () => {
 test('sweep leaves the record alone when the edit fails', async () => {
   const { home, profileDir } = await makeHome()
   try {
-    const pending = pendingSeat([{ packageName: 'demo-plugin', entryIds: ['demo-plugin'], at: '2026-01-01T00:00:00Z' }])
+    await writePending(home, [{ packageName: 'demo-plugin', entryIds: ['demo-plugin'], at: '2026-01-01T00:00:00Z' }])
     const built = createInstalledManager({
       profile: 'web',
       selfName: 'dsh-desktop-safe-market',
       loader: stubLoader([]).loader,
       home,
-      readPending: pending.read,
-      writePending: pending.write,
+      pendingFile: pendingFile(home),
     })
     // A directory where the patch file should be breaks every edit.
     await rm(join(profileDir, 'cordis.patch.yml'))
     await mkdir(join(profileDir, 'cordis.patch.yml'))
     await built.sweep()
-    assert.equal(pending.get().length, 1, 'the record survives to retry next boot')
+    assert.equal((await readPending(home)).length, 1, 'the record survives to retry next boot')
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -446,14 +523,12 @@ test('uninstall survives a broken patch layer: manifest edited, no record, live 
   try {
     await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
     const seat = stubLoader([{ id: 'include:demo-plugin', name: 'demo-plugin', fiberState: 2 }])
-    const pending = pendingSeat()
     const built = createInstalledManager({
       profile: 'web',
       selfName: 'dsh-desktop-safe-market',
       loader: seat.loader,
       home,
-      readPending: pending.read,
-      writePending: pending.write,
+      pendingFile: pendingFile(home),
     })
     await rm(join(profileDir, 'cordis.patch.yml'))
     await mkdir(join(profileDir, 'cordis.patch.yml'))
@@ -461,10 +536,11 @@ test('uninstall survives a broken patch layer: manifest edited, no record, live 
     // nicety, so their failure must not fail (or block a retry of) the verb.
     const result = await built.uninstall('demo-plugin')
     assert.equal(result.packages.length, 0)
+    assert.match(result.notice ?? '', /stop rows/, 'the notice names the failed stop so the panel can show it')
     const manifest = await readManifest(profileDir)
     assert.equal('demo-plugin' in (manifest.dependencies ?? {}), false)
     assert.deepEqual(manifest.dsh!.profile!.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
-    assert.deepEqual(pending.get(), [], 'no sweep record without rows to sweep')
+    assert.deepEqual(await readPending(home), [], 'no sweep record without rows to sweep')
     assert.deepEqual(seat.updates, [{ id: 'include:demo-plugin', options: { disabled: true } }], 'the live stop still ran')
   } finally {
     await rm(home, { recursive: true, force: true })
@@ -575,11 +651,14 @@ test('the installed wire codecs accept the real shapes and reject hostile ones',
       enabled: true,
       entries: [{ id: 'demo-plugin', name: 'demo-plugin', present: true, enabled: true, phase: 'active' }],
       error: '',
+      heldDown: false,
     }],
     profile: 'web',
     error: '',
   })
   assert.equal(result.packages[0]!.entries[0]!.phase, 'active')
+  assert.equal(result.notice, undefined, 'the outcome notice is optional on the wire')
+  assert.equal(marketInstalledResultSchema.parse({ ...result, notice: 'keeps running' }).notice, 'keeps running')
   assert.throws(() => packageNameSchema.parse('../evil'))
   assert.throws(() => packageNameSchema.parse('a b'))
   assert.throws(() => setInstalledEnabledUpdateSchema.parse({ packageName: 'demo-plugin', enabled: 'yes' }))

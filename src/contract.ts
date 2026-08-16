@@ -168,6 +168,14 @@ export interface MarketInstalledPackage {
   readonly entries: readonly MarketInstalledEntry[]
   /** Why the bundle could not be read (uninstall stays available); '' when read. */
   readonly error: string
+  /**
+   * A same-session uninstall of this package left stop rows in the profile's
+   * patch layer that are still holding its entries down: the sweep record is
+   * consumed only at the next boot, and the package came back before that —
+   * a mid-session reinstall. The panel explains the disabled state, and the
+   * ordinary Enable verb clears the rows.
+   */
+  readonly heldDown: boolean
 }
 
 /** The installed-panel read: the packages, or the reason the profile read failed. */
@@ -176,6 +184,12 @@ export interface MarketInstalledResult {
   /** The profile the list describes (the panel names it in its explainer). */
   readonly profile: string
   readonly error: string
+  /**
+   * An outcome line the verb wants the panel to show instead of the default
+   * success copy, e.g. an uninstall whose in-session stop failed and will
+   * only finish at the next boot. Absent (or empty) means the default copy.
+   */
+  readonly notice?: string
 }
 
 /** One enable/disable request for an installed package. */
@@ -288,6 +302,7 @@ export const marketInstalledPackageSchema = z.object({
   enabled: z.boolean(),
   entries: z.array(marketInstalledEntrySchema).readonly(),
   error: z.string(),
+  heldDown: z.boolean(),
 }).readonly()
 
 /** Strict wire codec for the installed-panel read. */
@@ -295,6 +310,7 @@ export const marketInstalledResultSchema = z.object({
   packages: z.array(marketInstalledPackageSchema).readonly(),
   profile: z.string(),
   error: z.string(),
+  notice: z.string().optional(),
 }).readonly()
 
 /** Strict wire codec for one enable/disable request. */

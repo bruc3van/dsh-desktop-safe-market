@@ -18,8 +18,10 @@
  *   never composes it), stops its entries for the rest of this session with
  *   the same disable-row mechanism — which also keeps a mid-session
  *   patch-file recompose from reviving them — and records the rows it wrote
- *   so the next boot's {@link InstalledManager.sweep} can take them back out
- *   of the user's file once the entries they target no longer exist.
+ *   (a small file seat under the harness home, independent of the storage
+ *   domain) so the next boot's {@link InstalledManager.sweep} can take them
+ *   back out of the user's file once the entries they target no longer
+ *   exist.
  *
  * Nothing here spawns a process or touches the network: every effect is a
  * local file edit plus an in-process Loader call.
@@ -42,9 +44,13 @@ export interface InstalledManagerOptions {
     readonly loader: Loader;
     /** Harness home override; defaults to the environment's resolution. */
     readonly home?: string;
-    /** Durable pending-uninstall record (the storage domain's seat). */
-    readonly readPending: () => readonly PendingUninstall[];
-    readonly writePending: (next: readonly PendingUninstall[]) => void;
+    /**
+     * The pending-uninstall seat file: one small JSON array per profile under
+     * the harness home (see {@link pendingFilePath}). A file, not the storage
+     * domain, so the boot sweep still runs when the domain is unavailable —
+     * losing the record is what strands stop rows in the user's patch file.
+     */
+    readonly pendingFile?: string;
 }
 /** The manager face the Remote service delegates to. */
 export interface InstalledManager {
@@ -53,7 +59,20 @@ export interface InstalledManager {
     uninstall(packageName: string): Promise<MarketInstalledResult>;
     /** Take back disable rows of finished uninstalls; run once at plugin start. */
     sweep(): Promise<void>;
+    /**
+     * Seed the file seat from a record an older version kept in the storage
+     * domain (one-time migration). The file wins when it already holds
+     * records; the caller then forgets the legacy field.
+     */
+    adoptPending(records: readonly PendingUninstall[]): Promise<void>;
 }
+/**
+ * The pending-uninstall seat for one profile: a small JSON file under the
+ * harness home (`$DSH_HOME` or `~/.dsh`), owned by this plugin and per
+ * profile — a sweep must only ever touch its own profile's rows. Profile
+ * names are validated (no separators) before they reach this path.
+ */
+export declare function pendingFilePath(profile: string, home?: string): string;
 /**
  * Create the manager over one profile directory.
  * @param options - profile identity, the live Loader, and the durable record seat.
