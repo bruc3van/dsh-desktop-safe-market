@@ -11,7 +11,16 @@
  */
 import { build } from 'esbuild'
 import { execFileSync } from 'node:child_process'
-import { mkdirSync } from 'node:fs'
+import { mkdirSync, readFileSync } from 'node:fs'
+
+// The version lives in two seats (package.json and dsh.plugin.json) and
+// nothing syncs them but this gate: a drifted manifest would ship a release
+// that misnames itself in the plugin list. Fail before any artifact lands.
+const { version: packageVersion } = JSON.parse(readFileSync('package.json', 'utf8'))
+const { version: manifestVersion } = JSON.parse(readFileSync('dsh.plugin.json', 'utf8'))
+if (packageVersion !== manifestVersion) {
+  throw new Error(`version drift: package.json is ${packageVersion} but dsh.plugin.json is ${manifestVersion} — bump both`)
+}
 
 mkdirSync('lib', { recursive: true })
 
