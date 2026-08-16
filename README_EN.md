@@ -9,7 +9,7 @@ A **review-before-install** extension marketplace for the DeepSeek Harness web G
 
 In use, it adds a **Marketplace** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
 
-- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable (what shipped with DSH, and an in-box seat that is not a profile dependency, are not listed); below it, the curated market, whose **All plugins** view ranks by stars.
+- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable; an in-box seat placed by the desktop client is listed here too, because nowhere else can remove it. Layers shipped with DSH, and in-box seats carrying no ownership marker, are not listed. Below it, the curated market, whose **All plugins** view ranks by stars.
 - **Skills** — what the current session can actually resolve.
 
 ![The marketplace tab](./assets/screenshots/marketplace.png)
@@ -70,10 +70,18 @@ The join is the installed package's `repository` field (every npm spelling is re
 
 ## The installed panel
 
-The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry. Layers shipped with the DSH profile template, and an in-box seat that is not a profile dependency (how the desktop client offers this market), are not listed. Two actions:
+The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry — **and any in-box seat placed by the desktop client**. Layers shipped with the DSH profile template are not listed. Two actions:
 
 - **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
 - **Uninstall** removes the dependency and the `dsh.profile.bundles` layer from the profile's `package.json` (the next boot simply never composes it) and stops the plugin for the rest of the session; on the next boot the plugin takes those stop rows back out of your patch file. The sweep record lives in a small plugin-owned file under the harness home — not the market's cache domain, so a broken domain cannot strand the rows; when the in-session stop fails, the uninstall notice says the plugin may run until the next restart. A plugin uninstalled and reinstalled within one session is held down by the leftover rows, and its card explains that Enable will clear them. Files left in `node_modules` become inert and are pruned by the next `dsh plugin` command.
+
+### Seats placed by the desktop client
+
+The desktop client does not install this market with `dsh plugin add`. It **copies** the plugin into `<DSH_HOME>/profiles/node_modules` and adds one entry to `dsh.profile.bundles` — no dependency. Such a seat is labelled *seated by the desktop client*, and **this panel is the only place it can be removed**: official `dsh plugin` deliberately never touches a bundle that is not a profile dependency, and the client that placed it may have been uninstalled since.
+
+For a seat the directory IS the install, so uninstalling removes the `bundles` entry *and* the copied directory. Taking only the entry would strand a plugin tree that nothing lists, nothing loads, and nothing can ever offer to remove again — the panel finds seats through the bundle list.
+
+If the client is still installed and still set to seat the marketplace, it will place the seat again the next time it starts; the card says so. To stop it coming back, turn the switch off in the client's connection settings. An in-box bundle with no ownership marker belongs to the deployment itself: it is neither listed nor removable here.
 
 By design it matches "review and install": **local file edits plus loader calls — no process spawned, no network** — the panel reads only this machine's own facts. With the market switched off, though, the page is the switch and nothing else: what you turned off is this marketplace, and it should not keep a plugin manager running in your settings.
 

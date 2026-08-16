@@ -18,7 +18,7 @@
  * expects (the tests assert the semantic round-trip).
  */
 import { createRequire } from 'node:module'
-import { existsSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { readFile, rename, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -41,9 +41,15 @@ export const PROFILE_PATCH_FILENAME = 'cordis.patch.yml'
  * A name in `dsh.profile.bundles` is not enough to treat a plugin as
  * user-installed. Official `dsh plugin` never touches a name that is not a
  * profile dependency, and the desktop client seats its in-box market the
- * same way — a bundle entry plus a symlink, no dependency. Those seats stay
- * out of the panel: listing them would offer an uninstall the next bundled
- * boot silently puts back.
+ * same way — a bundle entry plus a copied directory, no dependency.
+ *
+ * Such a seat IS listed when it carries the client's ownership marker (see
+ * {@link desktopSeatBundles}), because otherwise nothing could ever remove
+ * it: the official CLI will not touch it, and the client that seated it may
+ * be uninstalled by now. The old worry — that an uninstall would be silently
+ * undone by the next bundled boot — is answered on the card instead, which
+ * says so plainly. A seat with no marker is the deployment's own and stays
+ * out.
  */
 export const SHIPPED_BUNDLES: ReadonlySet<string> = new Set([
   '@deepseek-ai/dsh-base',
@@ -145,6 +151,57 @@ export async function readManifest(profileDir: string): Promise<ProfileManifest>
 /** Write the manifest back (2-space JSON, trailing newline, atomic). */
 export async function writeManifest(profileDir: string, manifest: ProfileManifest): Promise<void> {
   await atomicWrite(join(profileDir, 'package.json'), JSON.stringify(manifest, undefined, 2) + '\n')
+}
+
+/**
+ * The marker the desktop client writes into a seat it copied in, naming
+ * itself the owner. It is what makes an in-box seat removable from here: a
+ * bundle with no dependency is normally untouchable (the deployment itself),
+ * but a directory that says who put it there is a different thing — someone
+ * seated it automatically, and the person living in this profile should be
+ * able to un-seat it.
+ */
+export const DESKTOP_SEAT_MARKER = '.dsh-desktop-seat.json'
+
+/** Owner tag inside {@link DESKTOP_SEAT_MARKER}. */
+const DESKTOP_SEAT_OWNER = 'dsh-desktop'
+
+/**
+ * Whether this bundle is a desktop-client seat: listed, not a dependency, and
+ * carrying the client's ownership marker in the directory the profile
+ * resolves it from.
+ */
+export function isDesktopSeat(profileDir: string, packageName: string): boolean {
+  const dir = packageDirFromProfile(profileDir, packageName)
+  if (dir === undefined) return false
+  try {
+    const parsed = JSON.parse(readFileSync(join(dir, DESKTOP_SEAT_MARKER), 'utf8')) as { owner?: unknown }
+    return parsed !== null && typeof parsed === 'object' && parsed.owner === DESKTOP_SEAT_OWNER
+  } catch {
+    return false
+  }
+}
+
+/** The directory an in-box desktop seat occupies, for removal. */
+export function desktopSeatDir(profileDir: string, packageName: string): string | undefined {
+  return isDesktopSeat(profileDir, packageName) ? packageDirFromProfile(profileDir, packageName) : undefined
+}
+
+/**
+ * Bundle names listed in the profile that are NOT dependencies and NOT
+ * shipped template layers — the in-box seats. Only those carrying the desktop
+ * client's marker are returned: an unmarked one is the deployment's own and
+ * stays out of the panel, as before.
+ */
+export function desktopSeatBundles(manifest: ProfileManifest, profileDir: string): string[] {
+  const bundles = manifest.dsh?.profile?.bundles
+  if (!Array.isArray(bundles)) return []
+  const dependencies = manifest.dependencies ?? {}
+  return bundles.filter(name =>
+    typeof name === 'string'
+    && !SHIPPED_BUNDLES.has(name)
+    && !Object.hasOwn(dependencies, name)
+    && isDesktopSeat(profileDir, name))
 }
 
 /**

@@ -77,6 +77,8 @@ export declare const zh: {
     readonly 'installed.failed': "读取已安装插件失败：{reason}";
     readonly 'installed.empty': "还没有通过包安装的插件——从下面的市场挑一个，或运行 dsh plugin add。";
     readonly 'installed.self': "本插件";
+    readonly 'installed.inBox': "由桌面客户端接入";
+    readonly 'installed.inBoxNotice': string;
     readonly 'installed.running': "运行中";
     readonly 'installed.installedState': "已安装";
     readonly 'installed.disabled': "已停用";

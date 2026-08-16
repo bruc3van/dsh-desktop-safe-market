@@ -11,6 +11,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { readFile } from 'node:fs/promises'
+import { existsSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader'
@@ -654,6 +655,7 @@ test('the installed wire codecs accept the real shapes and reject hostile ones',
       description: 'a demo',
       repository: 'demo/demo-plugin',
       self: false,
+      inBox: false,
       enabled: true,
       entries: [{ id: 'demo-plugin', name: 'demo-plugin', present: true, enabled: true, phase: 'active' }],
       error: '',
@@ -859,4 +861,137 @@ test('repositorySlugOf strips a trailing slash before the .git suffix, not after
   // the wrong slug travelled on and silently joined nothing.
   assert.equal(repositorySlugOf({ repository: 'https://github.com/owner/name.git/' }), 'owner/name')
   assert.equal(repositorySlugOf({ repository: 'https://github.com/owner/name/' }), 'owner/name')
+})
+
+// ——— the desktop client's in-box seat: listed so it can be removed ———
+
+/** Seat a marked copy the way the desktop client does: files, no dependency. */
+async function makeDesktopSeat(home: string, name: string, patch: string): Promise<string> {
+  const dir = join(home, 'profiles', 'node_modules', name)
+  await mkdir(dir, { recursive: true })
+  await writeFile(join(dir, 'package.json'), JSON.stringify({
+    name, version: '0.2.4', description: 'the bundled market',
+    dsh: { bundle: { patch: './cordis.patch.yml' } },
+  }, undefined, 2))
+  await writeFile(join(dir, 'cordis.patch.yml'), patch)
+  await writeFile(join(dir, '.dsh-desktop-seat.json'),
+    JSON.stringify({ owner: 'dsh-desktop', version: '0.2.4' }) + '\n')
+  return dir
+}
+
+/** Add a bundle name to the fixture profile without adding a dependency. */
+async function listBundle(profileDir: string, name: string): Promise<void> {
+  const manifest = await readManifest(profileDir)
+  manifest.dsh!.profile!.bundles!.push(name)
+  await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, undefined, 2) + '\n')
+}
+
+test('a marked desktop seat is listed, so it can be removed at all', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    await makeDesktopSeat(home, 'dsh-desktop-safe-market',
+      '- insert:\n    - id: safe-market\n      name: dsh-desktop-safe-market\n')
+    await listBundle(profileDir, 'dsh-desktop-safe-market')
+    const { loader } = stubLoader([{ id: 'include:demo-plugin' }, { id: 'include:safe-market' }])
+    const result = await makeManager(home, loader).list()
+    const seat = result.packages.find(row => row.packageName === 'dsh-desktop-safe-market')
+    assert.ok(seat !== undefined, 'the seat must be listed — nothing else can remove it')
+    assert.equal(seat.inBox, true, 'and marked as seated rather than installed')
+    assert.equal(seat.version, '0.2.4')
+    // The ordinary dependency install is unchanged by any of this.
+    assert.equal(result.packages.find(row => row.packageName === 'demo-plugin')?.inBox, false)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('an in-box bundle with no ownership marker stays out of the panel', async () => {
+  // The deployment's own in-box bundles are not ours to offer an uninstall
+  // for; only a directory that says who seated it is.
+  const { home, profileDir } = await makeHome()
+  try {
+    const dir = join(home, 'profiles', 'node_modules', 'vendor-inbox')
+    await mkdir(dir, { recursive: true })
+    await writeFile(join(dir, 'package.json'), JSON.stringify({
+      name: 'vendor-inbox', version: '1.0.0', dsh: { bundle: { patch: './cordis.patch.yml' } },
+    }))
+    await writeFile(join(dir, 'cordis.patch.yml'), '- insert:\n    - id: vendor\n      name: vendor-inbox\n')
+    await listBundle(profileDir, 'vendor-inbox')
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    const { loader } = stubLoader([{ id: 'include:demo-plugin' }])
+    const result = await makeManager(home, loader).list()
+    assert.equal(result.packages.some(row => row.packageName === 'vendor-inbox'), false)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('uninstalling a desktop seat takes the bundle entry AND the copied files', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    const seatDir = await makeDesktopSeat(home, 'dsh-desktop-safe-market',
+      '- insert:\n    - id: safe-market\n      name: dsh-desktop-safe-market\n')
+    await listBundle(profileDir, 'dsh-desktop-safe-market')
+    const { loader } = stubLoader([{ id: 'include:demo-plugin' }, { id: 'include:safe-market' }])
+    const result = await makeManager(home, loader).uninstall('dsh-desktop-safe-market')
+    const manifest = await readManifest(profileDir)
+    assert.equal(manifest.dsh?.profile?.bundles?.includes('dsh-desktop-safe-market'), false,
+      'the profile must stop listing it')
+    assert.equal(existsSync(seatDir), false,
+      'the copy is the install: leaving it behind leaves a plugin tree nothing owns')
+    assert.equal(result.packages.some(row => row.packageName === 'dsh-desktop-safe-market'), false)
+    // The user's own install is untouched by removing a seat beside it.
+    assert.equal(manifest.dependencies?.['demo-plugin'], '^1.0.0')
+    assert.equal(manifest.dsh?.profile?.bundles?.includes('demo-plugin'), true)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a seat can be disabled and enabled like any other package', async () => {
+  // Today the only seat is the market itself, which the self-guard stops from
+  // disabling — so this path never runs in production and would rot unseen.
+  // It is reachable the moment a client seats a second plugin, and the panel
+  // already renders the switch for any non-self row: a Host that refused it
+  // would show a control that always errors.
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeDesktopSeat(home, 'other-seat', '- insert:\n    - id: other\n      name: other-seat\n')
+    await listBundle(profileDir, 'other-seat')
+    const { loader, updates } = stubLoader([{ id: 'include:other', name: 'other-seat' }])
+    const manager = makeManager(home, loader)
+    const disabled = await manager.setEnabled('other-seat', false)
+    assert.equal(disabled.packages.find(row => row.packageName === 'other-seat')?.enabled, false)
+    assert.deepEqual(updates.at(-1), { id: 'include:other', options: { disabled: true } },
+      'the live entry is nudged, exactly as for a dependency install')
+    const patch = await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8')
+    assert.match(patch, /- id: other\n  disabled: true/, 'and the durable row lands in the user patch layer')
+    await manager.setEnabled('other-seat', true)
+    const after = await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8')
+    assert.equal(after.includes('disabled: true'), false, 'enabling takes the row back out')
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('uninstalling the market itself removes its own copy, not just the entry', async () => {
+  // self && inBox is the case that actually ships. Skipping the directory
+  // here (as the stop rows are skipped) would take the name out of `bundles`
+  // and leave the tree behind — and since the panel finds seats THROUGH the
+  // bundle list, nothing could ever offer to remove it again.
+  const { home, profileDir } = await makeHome()
+  try {
+    const seatDir = await makeDesktopSeat(home, 'dsh-desktop-safe-market',
+      '- insert:\n    - id: safe-market\n      name: dsh-desktop-safe-market\n')
+    await listBundle(profileDir, 'dsh-desktop-safe-market')
+    const { loader, updates } = stubLoader([{ id: 'include:safe-market' }])
+    const result = await makeManager(home, loader).uninstall('dsh-desktop-safe-market')
+    assert.equal(existsSync(seatDir), false, 'the copy is the install')
+    assert.deepEqual(updates, [], 'but the running market is not stopped from inside itself')
+    assert.equal(result.notice, undefined, 'and nothing is reported as a fault')
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
 })

@@ -1,9 +1,12 @@
 /**
  * The installed-plugin manager: the host half of the market's "已安装" panel.
  *
- * It answers three verbs over the plugins a user installed into this profile
- * (shipped template layers and in-box seats that are not profile
- * dependencies are the deployment itself and never listed):
+ * It answers three verbs over the plugins a user installed into this profile,
+ * plus the in-box seats the desktop client marked as its own. Shipped
+ * template layers, and unmarked in-box bundles, are the deployment itself and
+ * are never listed. A marked seat IS listed, because otherwise nothing could
+ * remove it: the official CLI will not touch a name that is not a profile
+ * dependency, and the client that seated it may be uninstalled by now.
  *
  * - **list** reads the profile manifest's user bundles, joins each bundle's
  *   patch-declared entry ids against the live Loader tree, and reports the

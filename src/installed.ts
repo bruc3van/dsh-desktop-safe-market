@@ -1,9 +1,12 @@
 /**
  * The installed-plugin manager: the host half of the market's "已安装" panel.
  *
- * It answers three verbs over the plugins a user installed into this profile
- * (shipped template layers and in-box seats that are not profile
- * dependencies are the deployment itself and never listed):
+ * It answers three verbs over the plugins a user installed into this profile,
+ * plus the in-box seats the desktop client marked as its own. Shipped
+ * template layers, and unmarked in-box bundles, are the deployment itself and
+ * are never listed. A marked seat IS listed, because otherwise nothing could
+ * remove it: the official CLI will not touch a name that is not a profile
+ * dependency, and the client that seated it may be uninstalled by now.
  *
  * - **list** reads the profile manifest's user bundles, joins each bundle's
  *   patch-declared entry ids against the live Loader tree, and reports the
@@ -27,7 +30,7 @@
  * local file edit plus an in-process Loader call.
  */
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
-import { mkdir, readFile } from 'node:fs/promises'
+import { mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
 import type {
   MarketInstalledEntry,
@@ -37,6 +40,8 @@ import type {
 import {
   PROFILE_PATCH_FILENAME,
   atomicWrite,
+  desktopSeatBundles,
+  desktopSeatDir,
   readBundleInfo,
   readManifest,
   removeBundle,
@@ -169,9 +174,20 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
   const findLive = (map: Map<string, Entry>, id: string): Entry | undefined =>
     map.get(`include:${id}`) ?? map.get(id)
 
-  const readUserBundles = async (): Promise<{ manifest: ProfileManifest; bundles: string[] }> => {
+  /**
+   * What the panel manages: the packages installed as profile dependencies,
+   * plus any in-box seat the desktop client marked as its own. The second
+   * group is listed so it can be removed — nothing else can remove it, and
+   * `seats` keeps it separate so the verbs know a seat has no dependency to
+   * take away.
+   */
+  const readUserBundles = async (): Promise<{ manifest: ProfileManifest; bundles: string[]; seats: string[] }> => {
     const manifest = await readManifest(profileDir)
-    return { manifest, bundles: userBundles(manifest) }
+    return {
+      manifest,
+      bundles: userBundles(manifest),
+      seats: desktopSeatBundles(manifest, profileDir),
+    }
   }
 
   const assertInstalled = (bundles: readonly string[], packageName: string): void => {
@@ -209,8 +225,9 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
 
   async function list(): Promise<MarketInstalledResult> {
     let bundles: string[]
+    let seats: string[]
     try {
-      ;({ bundles } = await readUserBundles())
+      ;({ bundles, seats } = await readUserBundles())
     } catch (error) {
       return { packages: [], profile: options.profile, error: messageOf(error) }
     }
@@ -222,7 +239,8 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
       pending.some(record => record.packageName === packageName && record.entryIds.length > 0)
     const live = liveEntries()
     const packages: MarketInstalledPackage[] = []
-    for (const packageName of bundles) {
+    for (const packageName of [...bundles, ...seats]) {
+      const inBox = seats.includes(packageName)
       const self = packageName === options.selfName
       try {
         const info = await readBundleInfo(profileDir, packageName)
@@ -242,6 +260,7 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
           description: info.description,
           repository: info.repository,
           self,
+          inBox,
           enabled: entries.some(entry => entry.enabled),
           entries,
           error: '',
@@ -251,7 +270,7 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
         // A bundle whose package vanished from node_modules is still an
         // install fact: list it, say why it cannot be read, and let the user
         // uninstall the residue.
-        packages.push({ packageName, version: '', description: '', repository: '', self, enabled: false, entries: [], error: messageOf(error), heldDown: heldDown(packageName) })
+        packages.push({ packageName, version: '', description: '', repository: '', self, inBox, enabled: false, entries: [], error: messageOf(error), heldDown: heldDown(packageName) })
       }
     }
     return { packages, profile: options.profile, error: '' }
@@ -263,8 +282,13 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
       // panel that would re-enable it goes down with the plugin.
       throw new Error('the marketplace cannot disable itself from its own panel')
     }
-    const { bundles } = await readUserBundles()
-    assertInstalled(bundles, packageName)
+    // Seats count as installed here. Their entries are ordinary loader rows,
+    // and the disable mechanism is the profile's own patch layer — neither
+    // cares how the package arrived. Accepting only dependencies would leave
+    // the panel showing a switch the Host refuses, which is worse than either
+    // offering it or hiding it.
+    const { bundles, seats } = await readUserBundles()
+    assertInstalled([...bundles, ...seats], packageName)
     const info = await readBundleInfo(profileDir, packageName)
     const ids = info.entries.map(entry => entry.id)
     // Durable first: the patch row holds the state across boots even when the
@@ -284,8 +308,14 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
   }
 
   async function uninstall(packageName: string): Promise<MarketInstalledResult> {
-    const { manifest, bundles } = await readUserBundles()
-    assertInstalled(bundles, packageName)
+    const { manifest, bundles, seats } = await readUserBundles()
+    const inBox = seats.includes(packageName)
+    assertInstalled(inBox ? seats : bundles, packageName)
+    // An in-box seat has no dependency to drop and no pnpm-managed tree to
+    // leave behind: the directory IS the install, and it was put there by a
+    // client that may no longer exist to take it back. Removing the files is
+    // therefore part of the uninstall, not litter for someone else to sweep.
+    const seatDir = inBox ? desktopSeatDir(profileDir, packageName) : undefined
     const self = packageName === options.selfName
     const info = await readBundleInfo(profileDir, packageName).catch(() => ({ version: '', description: '', repository: '', entries: [] as { id: string; name: string }[] }))
     const ids = info.entries.map(entry => entry.id)
@@ -335,8 +365,23 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
         stopFaults.push('live stop: ' + messageOf(error))
       }
     }
-    // Self-uninstall edits the manifest only: this fiber is the one answering
-    // the call, and the bundle layer simply never composes on the next boot.
+    if (seatDir !== undefined) {
+      try {
+        await rm(seatDir, { recursive: true, force: true })
+      } catch (error) {
+        // The manifest edit already finished the uninstall; a directory left
+        // behind is inert (nothing lists it) but it is still ours to name.
+        stopFaults.push('seat directory: ' + messageOf(error))
+      }
+    }
+    // Self-uninstall skips the STOP rows — this fiber is the one answering the
+    // call, and the bundle layer simply never composes on the next boot. It
+    // does not skip removing the copy: for a seat the directory IS the
+    // install, and leaving it behind after taking the name out of `bundles`
+    // would strand a plugin tree that nothing lists, nothing loads, and
+    // nothing can offer to remove ever again (the panel finds seats through
+    // the bundle list). Deleting the running plugin's own directory is safe:
+    // its modules are resolved and cached in memory by the time this runs.
     const result = await list()
     if (stopFaults.length === 0) return result
     return {

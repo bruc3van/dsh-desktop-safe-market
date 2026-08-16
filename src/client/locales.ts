@@ -113,6 +113,9 @@ tarball 优先用最新 release tag，没有就用默认分支 {branch}。升级
   'installed.failed': '读取已安装插件失败：{reason}',
   'installed.empty': '还没有通过包安装的插件——从下面的市场挑一个，或运行 dsh plugin add。',
   'installed.self': '本插件',
+  'installed.inBox': '由桌面客户端接入',
+  'installed.inBoxNotice': '这是桌面客户端复制进本 profile 的，不是通过 dsh plugin add 安装的，'
+    + '所以官方命令不会碰它——要移除只能从这里。若客户端仍装着且未关闭「接入内置插件市场」，它下次启动会重新接入。',
   'installed.running': '运行中',
   'installed.installedState': '已安装',
   'installed.disabled': '已停用',
@@ -238,6 +241,11 @@ Prefer the latest release tag's tarball, falling back to the default branch {bra
   'installed.failed': 'Could not read installed plugins: {reason}',
   'installed.empty': 'No plugin packages installed yet — pick one from the market below, or run dsh plugin add.',
   'installed.self': 'this plugin',
+  'installed.inBox': 'seated by the desktop client',
+  'installed.inBoxNotice': 'The desktop client copied this into the profile; it was not installed with '
+    + 'dsh plugin add, so the official command will not touch it — here is the only place it can be removed. '
+    + 'If the client is still installed and still set to seat the marketplace, it will be seated again the '
+    + 'next time the client starts; its connection settings hold that switch.',
   'installed.running': 'Running',
   'installed.installedState': 'Installed',
   'installed.disabled': 'Disabled',

@@ -150,11 +150,11 @@ export interface MarketEnvironment {
   /**
    * The market's own version, for the section header.
    *
-   * The installed panel would show it as an ordinary row — but only for a
-   * copy installed as a profile DEPENDENCY. A deployment that seats the
-   * market as an in-box bundle (which is how the desktop client ships it)
-   * has no such row by design, and would otherwise never state which market
-   * it is running. '' when the manifest could not be read.
+   * The installed panel also carries a row for a marked in-box seat, so this
+   * is no longer the only place the version can appear — but that row exists
+   * only while the seat is listed, and it is one card among many. The header
+   * states which market is running regardless. '' when the manifest could
+   * not be read.
    */
   readonly version: string
 }
@@ -209,6 +209,13 @@ export interface MarketInstalledPackage {
   readonly repository: string
   /** The market's own row: listed, but the panel must not disable it. */
   readonly self: boolean
+  /**
+   * Seated by the desktop client rather than installed as a dependency: the
+   * client copied it in and wrote its ownership marker. Listed so it can be
+   * removed at all — the official CLI will not touch a name that is not a
+   * dependency, and the client that seated it may be uninstalled by now.
+   */
+  readonly inBox: boolean
   /** Package-level enablement: at least one of its entries is enabled. */
   readonly enabled: boolean
   readonly entries: readonly MarketInstalledEntry[]
@@ -350,6 +357,7 @@ export const marketInstalledPackageSchema = z.object({
   // Host reduces it to '' rather than passing the raw field on.
   repository: z.union([z.string().regex(REPOSITORY_SLUG_PATTERN), z.literal('')]),
   self: z.boolean(),
+  inBox: z.boolean(),
   enabled: z.boolean(),
   entries: z.array(marketInstalledEntrySchema).readonly(),
   error: z.string(),

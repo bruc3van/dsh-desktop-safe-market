@@ -302,13 +302,19 @@ function InstalledCard({ t, item, installed }: {
         <span className="dsh_market_installedState" data-state={stateOf(item)}>{stateLabels[stateOf(item)]}</span>
       </div>
       <p className="dsh_market_meta">
-        {[item.self ? t('installed.self') : '', item.version === '' ? '' : `v${item.version}`]
-          .filter(part => part !== '').join(' · ')}
+        {[
+          item.self ? t('installed.self') : '',
+          item.inBox ? t('installed.inBox') : '',
+          item.version === '' ? '' : `v${item.version}`,
+        ].filter(part => part !== '').join(' · ')}
       </p>
       {item.description !== '' && <p className="dsh_market_desc">{item.description}</p>}
       {item.error !== '' && <p className="dsh_market_cardError">{t('installed.readFailed', { reason: item.error })}</p>}
       {item.heldDown && item.entries.length > 0
         && <p className="dsh_market_cardNotice">{t('installed.heldDown')}</p>}
+      {/* Said on the card, not in the panel's blurb: it is true of this row
+          and misleading about every other one. */}
+      {item.inBox && <p className="dsh_market_cardNotice">{t('installed.inBoxNotice')}</p>}
       <div className="dsh_market_foot">
         {confirming === item.packageName
           ? (
@@ -827,10 +833,10 @@ export function MarketSection({
 
   return (
     <div className="dsh_market_section">
-      {/* The market's own version belongs in the header because it may exist
-          nowhere else: the installed panel lists profile DEPENDENCIES, and a
-          deployment that seats this plugin as an in-box bundle (how the
-          desktop client ships it) has no row there to carry it. */}
+      {/* The market's own version, where it is legible without scrolling. The
+          installed panel does carry a row for the in-box seat now, but that
+          row is one card among many and only exists while the seat is listed
+          — the header states which market this is, always. */}
       <h2 className="dsh_market_heading">
         {t('nav')}
         {isSafeVersion(snapshot.version) && <span className="dsh_market_selfVersion">{`v${snapshot.version}`}</span>}
