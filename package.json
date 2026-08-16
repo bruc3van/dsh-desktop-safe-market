@@ -52,7 +52,7 @@
     "build": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
-    "check": "pnpm run typecheck && pnpm test && pnpm run build"
+    "check": "pnpm run typecheck && pnpm run build && pnpm test"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",

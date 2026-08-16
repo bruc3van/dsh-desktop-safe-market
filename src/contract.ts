@@ -14,6 +14,15 @@ import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
 
 /**
+ * This package's name, and with it the cordis plugin name, the client bundle
+ * id, and the bundle entry a profile lists. It lives in the contract module
+ * because both halves of the entry split need it and neither may import the
+ * other: the body would drag the entry's bundle in behind it, and the entry
+ * must stay free of anything the body reaches.
+ */
+export const PACKAGE_NAME = 'dsh-desktop-safe-market'
+
+/**
  * The only `owner/name` shape the market keeps. The repository link is
  * rebuilt on the Host from a slug matching this pattern, and the wire codec
  * enforces the same shape, so the "host rebuilds the href" invariant is held

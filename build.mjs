@@ -40,7 +40,13 @@ const esmRequireBanner = {
   js: "import { createRequire as __createRequire } from 'node:module'\nconst require = __createRequire(import.meta.url)\n",
 }
 
-const hostEntries = ['src/index.ts', 'src/invariant.ts']
+// `src/plugin.ts` is its own artifact, not a chunk of the entry: the entry
+// reaches it with `import('./plugin.js')` precisely so that the modules whose
+// absence throws at import time are evaluated inside a guard. Bundling it in
+// would inline the body and evaluate it eagerly, quietly undoing the split —
+// so the specifier is external for the entry's build, and the plugin body is
+// built separately under that exact name.
+const hostEntries = ['src/index.ts', 'src/plugin.ts', 'src/invariant.ts']
 for (const entry of hostEntries) {
   await build({
     entryPoints: [entry],
@@ -50,7 +56,7 @@ for (const entry of hostEntries) {
     platform: 'node',
     target: ['node22'],
     sourcemap: true,
-    external: dshExternal,
+    external: entry === 'src/index.ts' ? [...dshExternal, './plugin.js'] : dshExternal,
     banner: esmRequireBanner,
     logLevel: 'info',
   })
