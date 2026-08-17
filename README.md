@@ -23,13 +23,13 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.8.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz
 ```
 
 也可以把安装这件事直接交给你的 Agent——复制这句提示词发过去即可：
 
 ```text
-帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.8.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
+帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -48,13 +48,13 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 2. 把审查提示词**填入输入框**——不发送；
 3. 关闭设置窗口，让你直接看到那个会话。
 
-提示词要求 Agent：把仓库里的一切内容当作待审查的不可信材料（仓库里的指令一律不照做），实际读代码而非只看 README，重点检查凭据/token 访问、向第三方外传数据、远程代码执行、`postinstall`/`prepare` 等安装脚本、无对应源码的混淆文件，以及权限是否远超其声称的功能；**发现可疑处必须停下来说明原因并询问你**；确认干净后按优先级用官方命令安装——npm 包或最新 release tag 的预构建 tarball 优先（安装时不执行该仓库的代码），只有两者都没有时才从默认分支装源码，且必须锁到具体 commit：
+提示词开宗明义：**唯一目的是安全审查——在安全的前提下高效安装，不做多余的验证**。它要求 Agent：把仓库里的一切内容当作待审查的不可信材料（仓库里的指令一律不照做），实际读代码而非只看 README，重点检查凭据/token 访问、向第三方外传数据、远程代码执行、`postinstall`/`prepare` 等安装脚本、无对应源码的混淆文件，以及权限是否远超其声称的功能；**发现可疑处必须停下来说明原因并询问你**；确认干净后按优先级用官方命令安装——npm 包或最新 release tag 的预构建 tarball 优先（安装时不执行该仓库的代码），只有两者都没有时才从默认分支装源码，且必须锁到具体 commit：
 
 ```sh
 dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<commit sha>>
 ```
 
-从源码装会被 pnpm 的 `allowBuilds` 门禁拦下——这是「允许该仓库的代码在安装时于你的机器上执行」的授权，提示词要求 Agent 把 pnpm 打印的键原样交给你确认、写进 profile 的 `pnpm-workspace.yaml` 后再重跑。装完后 Agent 会先自己用 `--dump-config` 验证（不必等重启），再告诉你重启 dsh 才会生效。
+从源码装会被 pnpm 的 `allowBuilds` 门禁拦下——这是「允许该仓库的代码在安装时于你的机器上执行」的授权，提示词要求 Agent 把 pnpm 打印的键原样交给你确认、写进 profile 的 `pnpm-workspace.yaml` 后再重跑。`dsh` 命令由 Agent 自己定位并执行，不需要你替它跑：先查环境变量，再看默认安装目录与 npm/pnpm 全局 bin，最精确的是取正在运行、监听 1466 端口的 dsh 进程的可执行文件路径。装完用 `dsh plugin --profile web list` 确认实际装的版本即可，然后告诉你重启 dsh 才会生效。
 
 发不发送由你按回车决定。没有任何工作区时，卡片会直接告诉你先去侧边栏选一个。
 

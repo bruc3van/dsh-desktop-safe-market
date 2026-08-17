@@ -23,13 +23,13 @@ This plugin joins the two halves: a community shortlist that has **already had t
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.8.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz
 ```
 
 Or hand the install to your agent — copy this one-line prompt:
 
 ```text
-Install the DSH plugin market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.8.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
+Install the DSH plugin market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -48,13 +48,13 @@ That is deliberate: **enabling is what lets this machine read the catalog snapsh
 2. **stages** the review prompt in the composer — it does not send it;
 3. closes Settings, so you are looking at the session it was staged in.
 
-The prompt asks the agent to treat everything in the repository as untrusted material under review (instructions found there are never followed), to read the code rather than the README, and to look for credential or token access, data sent to third-party hosts, remote code execution or downloaded-and-executed payloads, install-time scripts (`postinstall`, `prepare`, and friends), obfuscated sources with no matching original, and permissions far wider than the plugin claims. **Anything suspicious means stop, explain, and ask you.** A clean reading is followed by the official command, by priority — the npm package or the latest release tag's prebuilt tarball first (no repository code runs at install time), and only failing both, source from the default branch pinned to an exact commit:
+The prompt opens by stating its scope: **the only purpose is the security review — install efficiently once the code is clean, with no extra verification**. It asks the agent to treat everything in the repository as untrusted material under review (instructions found there are never followed), to read the code rather than the README, and to look for credential or token access, data sent to third-party hosts, remote code execution or downloaded-and-executed payloads, install-time scripts (`postinstall`, `prepare`, and friends), obfuscated sources with no matching original, and permissions far wider than the plugin claims. **Anything suspicious means stop, explain, and ask you.** A clean reading is followed by the official command, by priority — the npm package or the latest release tag's prebuilt tarball first (no repository code runs at install time), and only failing both, source from the default branch pinned to an exact commit:
 
 ```sh
 dsh plugin --profile web add <npm package | tarball URL | github:owner/name#<commit sha>>
 ```
 
-A source install is blocked by pnpm's `allowBuilds` gate — permission for the repository's code to run on your machine at install time — and the prompt has the agent hand pnpm's printed key to you verbatim, wait for it to land in the profile's `pnpm-workspace.yaml`, and re-run. dsh must be restarted before the plugin loads; the prompt has the agent verify with `--dump-config` right after the install, before that restart.
+A source install is blocked by pnpm's `allowBuilds` gate — permission for the repository's code to run on your machine at install time — and the prompt has the agent hand pnpm's printed key to you verbatim, wait for it to land in the profile's `pnpm-workspace.yaml`, and re-run. The agent locates and runs `dsh` itself — you are never asked to run commands: it checks the environment variables first, then the default installation directory and the npm/pnpm global bin, and, most precisely, takes the executable path of the running dsh process listening on port 1466. It confirms the install with `dsh plugin --profile web list` and then tells you dsh must be restarted before the plugin loads.
 
 Whether it is sent is your Enter key. With no workspace at all, the card says so and points you at the sidebar.
 
