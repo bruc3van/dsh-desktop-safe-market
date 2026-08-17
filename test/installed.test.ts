@@ -609,6 +609,7 @@ function storedState(overrides: Partial<SafeMarketDomainState> = {}): SafeMarket
       scanned: 1,
     },
     marketEtag: '"m1"',
+    activeBase: '',
     marketSize: 100,
     catalogBase: 'https://example.test/data',
     pendingUninstall: [],
@@ -619,12 +620,16 @@ function storedState(overrides: Partial<SafeMarketDomainState> = {}): SafeMarket
 test('adopting a usable stored catalog keeps the cache usable (the cut travels with the rows)', async () => {
   const usable = (candidate: SafeMarketDomainState): boolean =>
     candidate.catalog !== null && candidate.marketSize === 100 && candidate.catalogBase === 'https://example.test/data'
-  const adopted = adoptDomainState(initialDomainState, storedState({ pendingUninstall: [{ packageName: 'x', entryIds: ['x'], at: '2026-01-01T00:00:00Z' }] }), usable)
+  const adopted = adoptDomainState(initialDomainState, storedState({
+    pendingUninstall: [{ packageName: 'x', entryIds: ['x'], at: '2026-01-01T00:00:00Z' }],
+    activeBase: 'https://mirror.test/data',
+  }), usable)
   // The regression this locks out: adopting only the rows left the initial
   // marketSize (1) and catalogBase ('') behind, and the cache gate — which
   // re-checks those — turned the adopted catalog permanently unusable.
   assert.equal(usable(adopted), true)
   assert.equal(adopted.marketEtag, '"m1"')
+  assert.equal(adopted.activeBase, 'https://mirror.test/data', 'the sticky base travels with the rows')
   assert.deepEqual(adopted.pendingUninstall, [{ packageName: 'x', entryIds: ['x'], at: '2026-01-01T00:00:00Z' }])
 })
 
@@ -756,6 +761,9 @@ test('a store written before 0.2.1 still parses, keeping its catalog', () => {
   // Empty means "ask unconditionally once", which is exactly right after a
   // rename: the old ETags belong to files this build no longer reads.
   assert.equal(parsed.marketEtag, '')
+  // Same defaulting for the serving base added in 0.2.8: '' reads as "the
+  // primary answered" and the record still parses.
+  assert.equal(parsed.activeBase, '')
   assert.deepEqual(parsed.pendingUninstall, [])
 })
 

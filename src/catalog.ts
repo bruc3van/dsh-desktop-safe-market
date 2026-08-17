@@ -14,13 +14,41 @@
  * as hostile here: slugs are shape-checked, links are rebuilt from the slug,
  * branch names are kept only when they match the safe pattern, and every
  * field is re-truncated before the browser sees it.
+ *
+ * Resilience: the primary is the published GitHub file. When the deployment
+ * keeps the default base, a primary that cannot answer — timeout, DNS or
+ * connection failure, or an HTTP error status — fails the read over to the
+ * Gitee mirror of the same published file. The base that answered last is
+ * remembered in the durable
+ * cache (when one exists) and tried first on the next read, so an
+ * environment where GitHub never answers does not pay the primary's timeout
+ * on every refresh; if the sticky base later fails, the chain tries the
+ * other one and the stick moves. A deployment that configured its own
+ * `catalogBase` gets exactly that one source — the mirror belongs to the
+ * default GitHub base only.
  */
 import type { MarketCatalog, MarketCategory, MarketPlugin } from './contract.ts'
 import { isSafeBranchName, REPOSITORY_SLUG_PATTERN } from './contract.ts'
 
+/**
+ * The published community catalog this market reads by default: the
+ * awesome-dsh-plugin `data/` directory on GitHub raw. This is also the config
+ * schema's default `catalogBase` (the entry imports it), so the address lives
+ * here in one seat, next to its mirror, instead of being mirrored itself.
+ */
+export const DEFAULT_CATALOG_BASE = 'https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data'
+
+/**
+ * The Gitee mirror of the same published file, tried when the default base
+ * fails. Same content, same daily cadence, served from a host that is
+ * reachable where GitHub raw is not.
+ */
+export const GITEE_CATALOG_BASE = 'https://gitee.com/bruc3van/awesome-dsh-plugin/raw/main/data'
+
 /** The market is refreshed daily upstream; asking more often than this is noise. */
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1_000
 
+/** One attempt against one base; a chain of two costs at most twice this. */
 const FETCH_TIMEOUT_MS = 20_000
 
 /** A description longer than this is a README pasted into the field, not a summary. */
@@ -50,10 +78,14 @@ interface RawEntry {
  * the market from memory alone.
  */
 export interface CatalogCache {
-  /** The last parse and the ETag it was derived with. */
-  read: () => { catalog: MarketCatalog | null; marketEtag: string }
+  /**
+   * The last parse, the ETag it was derived with, and the base that served
+   * it. A record written before the mirror existed has no serving base; the
+   * empty string reads as "the primary answered" (see `attempt` below).
+   */
+  read: () => { catalog: MarketCatalog | null; marketEtag: string; activeBase: string }
   /** Persist a fresh parse. Failures are the cache's own business. */
-  write: (next: { catalog: MarketCatalog; marketEtag: string }) => void
+  write: (next: { catalog: MarketCatalog; marketEtag: string; activeBase: string }) => void
 }
 
 /** Deployment-varying knobs the plugin config owns. */
@@ -184,8 +216,12 @@ export interface CatalogSource {
  * @returns the reader.
  */
 export function createCatalogSource(options: CatalogOptions): CatalogSource {
-  const base = options.base.replace(/\/+$/, '')
-  const marketUrl = `${base}/market.json`
+  const primary = options.base.replace(/\/+$/, '')
+  // The mirror stands behind the DEFAULT GitHub base only. A deployment that
+  // pointed the market at its own mirror or curation gets exactly that one
+  // source — silently switching datasets is not what `catalogBase` was
+  // configured for.
+  const chain = primary === DEFAULT_CATALOG_BASE ? [primary, GITEE_CATALOG_BASE] : [primary]
   // The durable seat is NOT seeded at construction time. The plugin body
   // hands the source a cache port whose backing domain opens asynchronously
   // after this constructor returns, so reading it here would always see the
@@ -196,12 +232,17 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
   // covers a read that raced the domain open.
   let catalog: MarketCatalog | null = null
   let marketEtag = ''
+  // The base that served the current catalog: the sticky first choice for
+  // the next read. '' means unknown (memory-only, or a cache written before
+  // the mirror existed) and is treated as "the primary".
+  let activeBase = ''
   const seedFromCache = (): void => {
     if (catalog !== null) return
     const cached = options.cache?.read()
     if (cached === undefined || cached.catalog === null) return
     catalog = cached.catalog
     marketEtag = cached.marketEtag
+    activeBase = cached.activeBase
   }
   let inFlight: Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }> | null = null
 
@@ -211,27 +252,65 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
     return Number.isFinite(at) && Date.now() - at < REFRESH_INTERVAL_MS
   }
 
-  const refresh = async (signal: AbortSignal): Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }> => {
-    // Conditional first: the published market is small and moves at most once
-    // a day, so a 304 answers most reads. A conditional 200 IS the fresh body
-    // and is consumed directly — one file is the whole source, so there is no
-    // second file whose state must stay paired with it.
-    let response: Response
-    if (catalog !== null && marketEtag !== '') {
-      response = await fetch(marketUrl, { signal, headers: { 'if-none-match': marketEtag } })
-      if (response.status === 304) {
-        catalog = { ...catalog, refreshedAt: new Date().toISOString() }
-        options.cache?.write({ catalog, marketEtag })
-        return { catalog, stale: false, error: '' }
-      }
-    } else {
-      response = await fetch(marketUrl, { signal })
+  /**
+   * One fetch against one base, bound to the fetch timeout. Success consumes
+   * the answer and makes the base sticky: a 304 renews the freshness stamp
+   * (it is only asked for with the ETag that same base issued), a 200
+   * replaces the catalog. Throwing leaves the state untouched, so the next
+   * base in the chain starts from the same place.
+   */
+  const attempt = async (base: string): Promise<MarketCatalog> => {
+    const marketUrl = `${base}/market.json`
+    // The stored ETag certifies one server's content; a conditional request
+    // only goes to the base that issued it. An unknown serving base (legacy
+    // record) can only have been the primary.
+    const conditional = catalog !== null && marketEtag !== ''
+      && (activeBase === '' ? base === primary : activeBase === base)
+    const response = await fetch(marketUrl, {
+      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      headers: conditional ? { 'if-none-match': marketEtag } : undefined,
+    })
+    if (response.status === 304) {
+      // Only asked for when a catalog exists (see `conditional`); guard for
+      // the type, since TypeScript cannot read the correlation out of the
+      // boolean above.
+      if (catalog === null) throw new Error('catalog HTTP 304')
+      catalog = { ...catalog, refreshedAt: new Date().toISOString() }
+      options.cache?.write({ catalog, marketEtag, activeBase })
+      return catalog
     }
     if (!response.ok) throw new Error(`catalog HTTP ${String(response.status)}`)
     catalog = deriveMarket(await response.json(), options.marketSize)
     marketEtag = response.headers.get('etag') ?? ''
-    options.cache?.write({ catalog, marketEtag })
-    return { catalog, stale: false, error: '' }
+    activeBase = base
+    options.cache?.write({ catalog, marketEtag, activeBase })
+    return catalog
+  }
+
+  /** The chain in the order this read tries: the sticky base first. */
+  const orderedBases = (): string[] =>
+    activeBase === '' || !chain.includes(activeBase)
+      ? chain
+      : [activeBase, ...chain.filter(base => base !== activeBase)]
+
+  /** A short host label for an error that names two failed attempts. */
+  const baseLabel = (base: string): string => {
+    try { return new URL(base).host } catch { return base }
+  }
+
+  const refresh = async (): Promise<MarketCatalog> => {
+    const failures: string[] = []
+    for (const base of orderedBases()) {
+      try {
+        return await attempt(base)
+      } catch (error) {
+        // One failure ends the read only when no base is left. A
+        // single-source chain keeps the bare message; a two-source chain
+        // names the host of each failed attempt.
+        failures.push(chain.length > 1 ? `${baseLabel(base)}: ${errorText(error)}` : errorText(error))
+      }
+    }
+    throw new Error(failures.join('; '))
   }
 
   return {
@@ -243,17 +322,16 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
       if (!force && fresh() && catalog !== null) return { catalog, stale: false, error: '' }
       // One network read at a time: the tab can be reopened while the first
       // is still running, and two downloads answer the same question. The
-      // shared request is bound to the fetch timeout only — caller lifetimes
-      // never abort it, because the abort of one caller must not hand every
-      // other caller a dead answer. A caller that aborts stops waiting for
-      // its own copy of the result; the read itself finishes and serves
-      // whoever is still listening. `force` against an already running read
-      // merges into it (that read IS the fresh download force asked for), so
-      // no force gesture is dropped or duplicated.
+      // shared request is bound to the per-attempt fetch timeout only —
+      // caller lifetimes never abort it, because the abort of one caller must
+      // not hand every other caller a dead answer. A caller that aborts stops
+      // waiting for its own copy of the result; the read itself finishes and
+      // serves whoever is still listening. `force` against an already running
+      // read merges into it (that read IS the fresh download force asked
+      // for), so no force gesture is dropped or duplicated.
       const pending = (inFlight ??= (async () => {
-        const lifetime = AbortSignal.timeout(FETCH_TIMEOUT_MS)
         try {
-          return await refresh(lifetime)
+          return { catalog: await refresh(), stale: false, error: '' }
         } catch (error) {
           // A catalog already in memory still answers the question; the
           // browser is told the answer is old rather than shown a blank tab.

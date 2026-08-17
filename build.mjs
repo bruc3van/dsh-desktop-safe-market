@@ -94,4 +94,8 @@ await build({
   logLevel: 'info',
 })
 
-execFileSync('node_modules/.bin/tsc', ['-p', 'tsconfig.json'], { stdio: 'inherit' })
+// Run tsc through node itself: the `.bin` shims are platform-specific (a
+// POSIX script on Unix, a `.cmd` on Windows) and some sandboxes refuse to
+// exec command interpreters, while spawning the current node binary with the
+// typescript entry works everywhere.
+execFileSync(process.execPath, ['node_modules/typescript/bin/tsc', '-p', 'tsconfig.json'], { stdio: 'inherit' })

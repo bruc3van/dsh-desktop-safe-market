@@ -14,8 +14,33 @@
  * as hostile here: slugs are shape-checked, links are rebuilt from the slug,
  * branch names are kept only when they match the safe pattern, and every
  * field is re-truncated before the browser sees it.
+ *
+ * Resilience: the primary is the published GitHub file. When the deployment
+ * keeps the default base, a primary that cannot answer — timeout, DNS or
+ * connection failure, or an HTTP error status — fails the read over to the
+ * Gitee mirror of the same published file. The base that answered last is
+ * remembered in the durable
+ * cache (when one exists) and tried first on the next read, so an
+ * environment where GitHub never answers does not pay the primary's timeout
+ * on every refresh; if the sticky base later fails, the chain tries the
+ * other one and the stick moves. A deployment that configured its own
+ * `catalogBase` gets exactly that one source — the mirror belongs to the
+ * default GitHub base only.
  */
 import type { MarketCatalog } from './contract.ts';
+/**
+ * The published community catalog this market reads by default: the
+ * awesome-dsh-plugin `data/` directory on GitHub raw. This is also the config
+ * schema's default `catalogBase` (the entry imports it), so the address lives
+ * here in one seat, next to its mirror, instead of being mirrored itself.
+ */
+export declare const DEFAULT_CATALOG_BASE = "https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data";
+/**
+ * The Gitee mirror of the same published file, tried when the default base
+ * fails. Same content, same daily cadence, served from a host that is
+ * reachable where GitHub raw is not.
+ */
+export declare const GITEE_CATALOG_BASE = "https://gitee.com/bruc3van/awesome-dsh-plugin/raw/main/data";
 /**
  * Where a parsed catalog survives a restart. The catalog source neither opens
  * nor closes this — the plugin body owns the domain's lifecycle and hands the
@@ -23,15 +48,21 @@ import type { MarketCatalog } from './contract.ts';
  * the market from memory alone.
  */
 export interface CatalogCache {
-    /** The last parse and the ETag it was derived with. */
+    /**
+     * The last parse, the ETag it was derived with, and the base that served
+     * it. A record written before the mirror existed has no serving base; the
+     * empty string reads as "the primary answered" (see `attempt` below).
+     */
     read: () => {
         catalog: MarketCatalog | null;
         marketEtag: string;
+        activeBase: string;
     };
     /** Persist a fresh parse. Failures are the cache's own business. */
     write: (next: {
         catalog: MarketCatalog;
         marketEtag: string;
+        activeBase: string;
     }) => void;
 }
 /** Deployment-varying knobs the plugin config owns. */

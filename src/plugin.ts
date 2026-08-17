@@ -93,14 +93,15 @@ export function applyMarket(ctx: Context, resolved: Config): () => void {
   const cache: CatalogCache = {
     read: () => (
       usable(state)
-        ? { catalog: state.catalog, marketEtag: state.marketEtag }
-        : { catalog: null, marketEtag: '' }
+        ? { catalog: state.catalog, marketEtag: state.marketEtag, activeBase: state.activeBase }
+        : { catalog: null, marketEtag: '', activeBase: '' }
     ),
     write: (next) => {
       state = {
         ...state,
         catalog: next.catalog,
         marketEtag: next.marketEtag,
+        activeBase: next.activeBase,
         marketSize: resolved.marketSize,
         catalogBase: resolved.catalogBase,
       }

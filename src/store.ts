@@ -41,6 +41,18 @@ export const safeMarketDomainState = z.object({
    */
   marketEtag: z.string().default(''),
   /**
+   * The base that served the current catalog — the sticky first choice for
+   * the next read, so an environment where the primary never answers does
+   * not pay its timeout on every refresh (see catalog.ts). Defaulted, not
+   * required, for the same reason `marketEtag` is: a record written before
+   * the Gitee mirror existed has no serving base, and rejecting the whole
+   * global over a missing field would cost exactly the resilience this field
+   * exists to buy. `''` reads as "the primary answered"; a 200 that serves a
+   * fresh market records the serving base, while a 304 keeps `''` (the
+   * primary answered — which is what `''` already means).
+   */
+  activeBase: z.string().default(''),
+  /**
    * The market size the catalog was reduced with. A deployment that changes
    * `marketSize` must not keep serving a list cut to the old number.
    */
@@ -68,6 +80,7 @@ export type SafeMarketDomainState = z.infer<typeof safeMarketDomainState>
 export const initialDomainState: SafeMarketDomainState = {
   catalog: null,
   marketEtag: '',
+  activeBase: '',
   marketSize: 1,
   catalogBase: '',
   pendingUninstall: [],
@@ -115,6 +128,7 @@ export function adoptDomainState(
     ...next,
     catalog: stored.catalog,
     marketEtag: stored.marketEtag,
+    activeBase: stored.activeBase,
     marketSize: stored.marketSize,
     catalogBase: stored.catalogBase,
   }

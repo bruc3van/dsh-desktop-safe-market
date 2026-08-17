@@ -28,6 +28,7 @@
  */
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
+import { DEFAULT_CATALOG_BASE } from './catalog.ts'
 import { PACKAGE_NAME } from './contract.ts'
 
 /** Cordis plugin name (the Loader entry and client bundle id). */
@@ -56,9 +57,6 @@ export type {
   MarketSkillsResult,
   SafeMarketSettings,
 } from './contract.ts'
-
-/** The published community catalog this market reads. */
-const DEFAULT_CATALOG_BASE = 'https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data'
 
 /** Host plugin configuration, validated at load by the Loader. */
 export interface Config {
