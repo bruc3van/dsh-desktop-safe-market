@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-safe-market",
   "description": "A safety-first plugin marketplace for the DeepSeek Harness web GUI: a curated community shortlist, and an install that starts with a security review",
-  "version": "0.2.7",
+  "version": "0.2.8",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
