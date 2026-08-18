@@ -333,6 +333,15 @@ export const cssText = `
   margin-top: auto;
   padding-top: 2px;
 }
+/* The disable verb reuses the section's ghost button, which is sized for the
+   page chrome (enable/refresh). In this row it must match the uninstall
+   control beside it — same padding, type size, and line box. */
+.dsh_market_foot .dsh_market_ghost {
+  padding: 4px 12px;
+  font-size: 12px;
+  line-height: 18px;
+  border-radius: 999px;
+}
 .dsh_market_link {
   flex: none;
   padding: 4px 10px;
@@ -501,6 +510,7 @@ export const cssText = `
   color: var(--dsw-alias-state-error-primary);
   font: inherit;
   font-size: 12px;
+  line-height: 18px;
   cursor: pointer;
   transition: background-color .15s ease;
 }

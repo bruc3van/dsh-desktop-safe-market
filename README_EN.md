@@ -9,12 +9,12 @@ A **review-before-install** extension marketplace for the DeepSeek Harness web G
 - **A curated source.** The list is not a raw crawl of the `dsh-plugin` topic. It is the daily, human-curated output of the [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) snapshot pipeline — topic riders, archived and disabled repositories are removed upstream, and entries are dealt round by round across categories — so what you browse is an editorially filtered shortlist, never a popularity dump.
 - **Review before install.** The install button installs nothing. It opens a new session and stages a **security-review prompt**; an agent reads the repository's actual code, and only a clean reading proceeds to the official install command. The plugin itself has no interface that could run an install — review and install are inseparable by construction.
 
-In use, it adds a **Marketplace** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
+In use, it adds a **Safe Market** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
 
 - **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable; the marketplace plugin the desktop client placed is listed here too, because nowhere else can remove it. Layers shipped with DSH, and in-box bundles carrying no ownership marker, are not listed. Below it, the curated market, whose **All plugins** view ranks by stars.
 - **Skills** — what the current session can actually resolve.
 
-![The marketplace tab](./assets/screenshots/marketplace.png)
+![The Safe Market tab](./assets/screenshots/marketplace.png)
 
 ## What it is for
 
@@ -31,7 +31,7 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 Or hand the install to your agent — copy this one-line prompt:
 
 ```text
-Install the DSH plugin market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.11.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
+Install DSH Safe Market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.11.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -85,7 +85,7 @@ The desktop client does not install this market with `dsh plugin add`. It **copi
 
 The copy is never written as a dependency — the directory itself IS the install — so uninstalling removes the `bundles` entry *and* the copied directory. Taking only the entry would strand a plugin tree that nothing lists, nothing loads, and nothing can ever offer to remove again; the panel finds this plugin through the bundle list.
 
-If the client is still installed and still set to install the marketplace, it will put the plugin back the next time it starts; the card says so. To stop it coming back, turn the switch off in the client's connection settings. An in-box bundle with no ownership marker belongs to the deployment itself: it is neither listed nor removable here.
+If the client is still installed and still set to seat the built-in Safe Market, it will put the plugin back the next time it starts; the card says so. To stop it coming back, turn the switch off in the client's connection settings. An in-box bundle with no ownership marker belongs to the deployment itself: it is neither listed nor removable here.
 
 By design it matches "review and install": **disable, listing, and in-box uninstall stay local file edits plus loader calls**. Uninstall of a user plugin is the one verb that spawns: `pnpm remove` in this profile directory, never an install over the network. With the market switched off, though, the page is the switch and nothing else: what you turned off is this marketplace, and it should not keep a plugin manager running in your settings.
 

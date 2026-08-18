@@ -9,12 +9,12 @@
 - **精选来源**：市场列表不是 GitHub topic 的原始抓取，而是 [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 每日快照管线的**人工精选**产物——蹭 topic 的非插件、归档/停用仓库在上游就被剔除，席位再按类目逐轮均衡发牌——你浏览的是一份经过编辑把关的短名单，而不是热度堆场。
 - **先审查再安装**：点「安全安装」不会装任何东西。它打开一个新会话、把一段**安全审查提示词**放进输入框，由 Agent 实际读仓库代码，确认干净后才执行官方安装命令。插件自身没有任何能执行安装的接口——审查与安装因此在结构上不可分割、绕不过去。
 
-使用上，它在设置里多一个**插件市场**导航项（挂市场自己的店面图标），分两页：
+使用上，它在设置里多一个**安全市场**导航项（挂市场自己的店面图标），分两页：
 
 - **插件**：上方是**已安装面板**——列出当前 profile 通过包安装的插件及其运行状态，支持停用/启用和卸载；桌面客户端自动装进来的市场插件也列在这里，因为别处都移除不了它。DSH 自带的插件、以及没有归属标记的 in-box 接入不在此列。下方是精选市场，「全部插件」视图按 Star 数排名。
 - **技能**：列出当前会话实际能解析到的技能。
 
-![插件市场](./assets/screenshots/marketplace.png)
+![安全市场](./assets/screenshots/marketplace.png)
 
 ## 它解决什么问题
 
@@ -31,7 +31,7 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 也可以把安装这件事直接交给你的 Agent——复制这句提示词发过去即可：
 
 ```text
-帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.11.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
+帮我安装 DSH 安全市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.11.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -40,7 +40,7 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 
 ## 首次使用要手动开启
 
-「插件」页的市场部分默认是**关闭**状态，只显示一张说明卡片和一个「启用插件市场」按钮（已安装面板不受开关影响，随时可见）。
+「插件」页的市场部分默认是**关闭**状态，只显示一张说明卡片和一个「启用安全市场」按钮（已安装面板不受开关影响，随时可见）。
 
 这是刻意的：**开启才会让本机去 GitHub 读取目录快照**，关闭时插件不发起任何网络请求。一个装上就开始联网的插件，等于替你做了决定。开关是插件自己的持久化设置，开一次之后一直有效。
 
@@ -85,7 +85,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 
 它没有写进依赖，**目录本身就是安装**，所以卸载会同时删掉 `bundles` 条目和那份复制的目录——只摘条目会留下一棵没人列出、没人加载、也再无法移除的插件树（面板正是靠 `bundles` 列表找到它的）。
 
-如果客户端还装着、且没有关掉它连接设置里的「接入内置插件市场」，那么它下次启动会把插件重新装回。卡片上写明了这一点：要彻底不再出现，请在客户端那边关掉开关。没有归属标记的 in-box bundle 属于部署自身，面板不列出、也不提供卸载。
+如果客户端还装着、且没有关掉它连接设置里的「接入内置安全市场」，那么它下次启动会把插件重新装回。卡片上写明了这一点：要彻底不再出现，请在客户端那边关掉开关。没有归属标记的 in-box bundle 属于部署自身，面板不列出、也不提供卸载。
 
 设计上与「安全安装」一致：**停用、列表和内置座位仍是本地文件编辑 + loader 调用**。用户插件的卸载是唯一会启动进程的动词：在本 profile 目录跑 `pnpm remove`，不联网安装任何东西。市场关掉时这一页只剩开关本身：你关掉的是这个市场，它不该继续在你的设置里开着一个插件管理器。
 

@@ -73,18 +73,18 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
 
 装完用 \`dsh plugin --profile {profile} list <包名>\` 确认实际装的版本，告诉我需要重启 dsh 才会生效。`,
 
-  'nav': '插件市场',
+  'nav': '安全市场',
   'tab.plugins': '插件',
   'tab.skills': '技能',
-  'tabs.aria': '插件市场分区',
+  'tabs.aria': '安全市场分区',
 
-  'intro.title': '社区插件市场',
+  'intro.title': '安全市场',
   'intro.slogan': '深度扫描 5 分钟，放心使用每一天。',
   'intro.body': '按分类均衡列出社区精选插件，数据来自 awesome-dsh-plugin 每日刷新的目录。'
     + '开启后本机会从 GitHub 读取该目录快照；关闭时不会发起任何网络请求。',
-  'intro.enable': '启用插件市场',
+  'intro.enable': '启用安全市场',
   'intro.enabling': '正在启用…',
-  'intro.disable': '停用插件市场',
+  'intro.disable': '停用安全市场',
   'intro.disclaimer': '收录不代表安全背书。安装前请用「安全审查」让 Agent 读一遍代码，并自己看过结论再决定。',
 
   'search': '搜索插件名称、简介或分类',
@@ -133,12 +133,12 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
   'installed.self': '本插件',
   'installed.inBox': '由桌面客户端接入',
   'installed.inBoxNotice': '这是桌面客户端复制进本 profile 的，不是通过 dsh plugin add 安装的，'
-    + '所以官方命令不会碰它——要移除只能从这里。若客户端仍装着且未关闭「接入内置插件市场」，它下次启动会重新接入。',
+    + '所以官方命令不会碰它——要移除只能从这里。若客户端仍装着且未关闭「接入内置安全市场」，它下次启动会重新接入。',
   'installed.unregistered': '未接入层',
   'installed.unregisteredState': '未加载',
   'installed.unregisteredNotice': '已作为依赖装上，但没有写进 dsh.profile.bundles，当前不会加载。'
     + '可以从这里卸载（会跑 pnpm remove）；要让它生效，请用官方 dsh plugin add 重装或把名字补进 bundles。',
-  'installed.running': '运行中',
+  'installed.running': '已启用',
   'installed.installedState': '已安装',
   'installed.disabled': '已停用',
   'installed.failedState': '加载失败',
@@ -220,19 +220,19 @@ Locate the dsh command yourself and run it — never hand commands back to me. L
 
 After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to confirm the version that actually installed, then tell me dsh must be restarted before the new version loads.`,
 
-  'nav': 'Marketplace',
+  'nav': 'Safe Market',
   'tab.plugins': 'Plugins',
   'tab.skills': 'Skills',
-  'tabs.aria': 'Marketplace pages',
+  'tabs.aria': 'Safe Market pages',
 
-  'intro.title': 'Community plugin marketplace',
+  'intro.title': 'Safe Market',
   'intro.slogan': 'A deep scan in 5 minutes — use with confidence every day.',
   'intro.body': 'A shortlist of community plugins, balanced across categories, from the daily-refreshed'
     + ' awesome-dsh-plugin catalog. Turning it on lets this machine read that catalog snapshot from GitHub;'
     + ' while it is off, nothing is requested.',
-  'intro.enable': 'Enable the marketplace',
+  'intro.enable': 'Enable Safe Market',
   'intro.enabling': 'Enabling…',
-  'intro.disable': 'Disable the marketplace',
+  'intro.disable': 'Disable Safe Market',
   'intro.disclaimer': 'Being listed is not a safety endorsement. Use Review and install to have the agent read the'
     + ' code first, and read its conclusion yourself before deciding.',
 
@@ -284,13 +284,13 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
   'installed.inBox': 'seated by the desktop client',
   'installed.inBoxNotice': 'The desktop client copied this into the profile; it was not installed with '
     + 'dsh plugin add, so the official command will not touch it — here is the only place it can be removed. '
-    + 'If the client is still installed and still set to seat the marketplace, it will be seated again the '
+    + 'If the client is still installed and still set to seat the built-in Safe Market, it will be seated again the '
     + 'next time the client starts; its connection settings hold that switch.',
   'installed.unregistered': 'not in the stack',
   'installed.unregisteredState': 'Not loaded',
   'installed.unregisteredNotice': 'Installed as a dependency but missing from dsh.profile.bundles, so it is not loaded.'
     + ' Uninstall from here runs pnpm remove; to load it, reinstall with dsh plugin add or add the name to bundles.',
-  'installed.running': 'Running',
+  'installed.running': 'Enabled',
   'installed.installedState': 'Installed',
   'installed.disabled': 'Disabled',
   'installed.failedState': 'Failed',
