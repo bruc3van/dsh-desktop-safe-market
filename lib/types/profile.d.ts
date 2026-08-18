@@ -94,11 +94,33 @@ export declare function desktopSeatBundles(manifest: ProfileManifest, profileDir
  */
 export declare function userBundles(manifest: ProfileManifest): string[];
 /**
+ * Whether a resolvable dependency declares a `dsh.bundle` patch — i.e. is a
+ * plugin, not a plain library sitting in `dependencies`.
+ */
+export declare function declaresBundle(profileDir: string, packageName: string): boolean;
+/**
+ * Plugin packages that sit in `dependencies` but not in `dsh.profile.bundles`.
+ * They are installed but not composed — the whale-girl shape: pnpm wrote the
+ * dep, reconcile never registered the layer. Listed so the panel can uninstall
+ * them; plain libraries (zod and friends) stay out.
+ */
+export declare function unregisteredPlugins(manifest: ProfileManifest, profileDir: string): string[];
+/** The profile's pnpm workspace file: `allowBuilds` and `minimumReleaseAgeExclude`. */
+export declare const PROFILE_WORKSPACE_FILENAME = "pnpm-workspace.yaml";
+/**
+ * Drop one package's leftover install-gate entries from the profile's
+ * `pnpm-workspace.yaml`: its `allowBuilds` key, and any
+ * `minimumReleaseAgeExclude` row that names it. Other keys and comments stay.
+ * A missing file is a no-op.
+ * @returns true when the file changed.
+ */
+export declare function removePackageInstallGate(profileDir: string, packageName: string): Promise<boolean>;
+/**
  * Remove one bundle from the manifest: its dependency entry and its
  * `dsh.profile.bundles` seat, the exact two facts the next boot's composition
- * and the CLI's reconcile read. Leftover files under `node_modules` become
- * inert the moment the layer is gone and are pruned by the next
- * `dsh plugin` command's pnpm run.
+ * and the CLI's reconcile read. For a user plugin the manager also runs
+ * `pnpm remove` so the lockfile and `node_modules` go with them; this helper
+ * is the manifest half, and the fallback when pnpm cannot run.
  * @returns true when the manifest changed.
  */
 export declare function removeBundle(manifest: ProfileManifest, packageName: string): boolean;

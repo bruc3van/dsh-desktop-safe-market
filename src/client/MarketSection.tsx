@@ -140,8 +140,9 @@ function matches(item: MarketPlugin, query: string, category: string, english: b
 }
 
 /** The status a package row shows, from its own live facts. */
-function stateOf(item: MarketInstalledPackage): 'readFailed' | 'disabled' | 'failed' | 'running' | 'installed' {
+function stateOf(item: MarketInstalledPackage): 'readFailed' | 'unregistered' | 'disabled' | 'failed' | 'running' | 'installed' {
   if (item.error !== '') return 'readFailed'
+  if (item.unregistered) return 'unregistered'
   // A bundle whose patch declares no entry rows is neither running nor
   // stopped — installed, with nothing live to report.
   if (item.entries.length === 0) return 'installed'
@@ -294,6 +295,7 @@ function InstalledCard({ t, item, installed }: {
     failed: t('installed.failedState'),
     readFailed: t('installed.readFailedState'),
     installed: t('installed.installedState'),
+    unregistered: t('installed.unregisteredState'),
   }
   return (
     <li className="dsh_market_card">
@@ -305,6 +307,7 @@ function InstalledCard({ t, item, installed }: {
         {[
           item.self ? t('installed.self') : '',
           item.inBox ? t('installed.inBox') : '',
+          item.unregistered ? t('installed.unregistered') : '',
           item.version === '' ? '' : `v${item.version}`,
         ].filter(part => part !== '').join(' · ')}
         {/* The how-and-why of a desktop seat, folded behind a hint icon: it
@@ -319,6 +322,16 @@ function InstalledCard({ t, item, installed }: {
               <circle cx="8" cy="4.9" r="0.85" fill="currentColor" />
             </svg>
             <span className="dsh_market_hintTip" role="tooltip">{t('installed.inBoxNotice')}</span>
+          </span>
+        )}
+        {item.unregistered && (
+          <span className="dsh_market_hint" tabIndex={0} aria-label={t('installed.unregisteredNotice')}>
+            <svg viewBox="0 0 16 16" aria-hidden="true">
+              <circle cx="8" cy="8" r="6.4" fill="none" stroke="currentColor" strokeWidth="1.2" />
+              <path d="M8 7.3v3.4" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+              <circle cx="8" cy="4.9" r="0.85" fill="currentColor" />
+            </svg>
+            <span className="dsh_market_hintTip" role="tooltip">{t('installed.unregisteredNotice')}</span>
           </span>
         )}
       </p>
@@ -351,7 +364,7 @@ function InstalledCard({ t, item, installed }: {
             )
           : (
             <>
-              {!item.self && (
+              {!item.self && !item.unregistered && (
                 <button
                   type="button"
                   className="dsh_market_ghost"

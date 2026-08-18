@@ -80,6 +80,9 @@ export declare const zh: {
     readonly 'installed.self': "本插件";
     readonly 'installed.inBox': "由桌面客户端接入";
     readonly 'installed.inBoxNotice': string;
+    readonly 'installed.unregistered': "未接入层";
+    readonly 'installed.unregisteredState': "未加载";
+    readonly 'installed.unregisteredNotice': string;
     readonly 'installed.running': "运行中";
     readonly 'installed.installedState': "已安装";
     readonly 'installed.disabled': "已停用";
@@ -94,7 +97,7 @@ export declare const zh: {
     readonly 'installed.confirmUninstall': "确认卸载 {name}？";
     readonly 'installed.confirm': "确认卸载";
     readonly 'installed.cancel': "取消";
-    readonly 'installed.uninstalled': "已卸载 {name}，重启后完成清理。";
+    readonly 'installed.uninstalled': "已卸载 {name}。";
     readonly 'installed.actionFailed': "操作失败：{reason}";
     readonly 'installed.readFailed': "该包无法读取：{reason}";
     readonly 'installed.heldDown': "本会话中卸载过该插件，残留的停用行把它按住了——点「启用」即可恢复。";

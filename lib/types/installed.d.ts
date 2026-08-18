@@ -8,29 +8,35 @@
  * remove it: the official CLI will not touch a name that is not a profile
  * dependency, and the client that seated it may be uninstalled by now.
  *
- * - **list** reads the profile manifest's user bundles, joins each bundle's
- *   patch-declared entry ids against the live Loader tree, and reports the
- *   package-level enable state the panel toggles.
+ * - **list** reads the profile manifest's user bundles (and any plugin still
+ *   in `dependencies` but missing from `dsh.profile.bundles`, so a failed
+ *   reconcile cannot hide from uninstall), joins each bundle's patch-declared
+ *   entry ids against the live Loader tree, and reports the package-level
+ *   enable state the panel toggles.
  * - **setEnabled** writes (or removes) `disabled: true` rows in the profile's
  *   own patch layer — the durable seat the launcher recomposes from on every
  *   boot — and then nudges the live entries directly, so the change takes
  *   effect now even on a launcher without the patch-file watcher. The two
  *   paths are idempotent against each other: whichever lands second finds no
  *   diff left to apply.
- * - **uninstall** removes the bundle from the manifest (the next boot simply
- *   never composes it), stops its entries for the rest of this session with
- *   the same disable-row mechanism — which also keeps a mid-session
- *   patch-file recompose from reviving them — and records the rows it wrote
- *   (a small file seat under the harness home, independent of the storage
- *   domain) so the next boot's {@link InstalledManager.sweep} can take them
- *   back out of the user's file once the entries they target no longer
- *   exist.
+ * - **uninstall** stops the entries for the rest of this session (same
+ *   disable-row mechanism, so a mid-session patch-file recompose cannot
+ *   revive them) and records the rows it wrote so the next boot's
+ *   {@link InstalledManager.sweep} can take them back out of the user's
+ *   patch file. For a user plugin it then runs `pnpm remove` in the profile
+ *   directory — the same primitive official `dsh plugin remove` forwards to
+ *   — so the lockfile and `node_modules` go with the manifest edit; an
+ *   in-box seat has no pnpm tree and is removed by deleting its copy. A
+ *   failed pnpm run still drops the name from the manifest (next boot will
+ *   not compose it) and the result notice names the prune fault.
  *
- * Nothing here spawns a process or touches the network: every effect is a
- * local file edit plus an in-process Loader call.
+ * Listing, enable, disable, and in-box uninstall stay local file edits plus
+ * an in-process Loader call. User-plugin uninstall is the one verb that
+ * spawns: `pnpm remove` against the profile directory, never the network
+ * as an install.
  */
 import type { Loader } from '@deepseek-ai/cordis-plugin-loader';
-import type { MarketInstalledResult } from './contract.ts';
+import { type MarketInstalledResult } from './contract.ts';
 /** One uninstall the manager still has disable rows out for. */
 export interface PendingUninstall {
     readonly packageName: string;
@@ -54,6 +60,18 @@ export interface InstalledManagerOptions {
      * losing the record is what strands stop rows in the user's patch file.
      */
     readonly pendingFile?: string;
+    /**
+     * Drop a user-plugin dependency from the profile install tree. Defaults to
+     * `pnpm remove` in the profile directory (what official `dsh plugin remove`
+     * forwards to). Tests inject a stub so they do not need a real pnpm project.
+     * In-box seats never call this: they are not dependencies.
+     */
+    readonly removeDependency?: (packageName: string) => Promise<RemoveDependencyResult>;
+}
+/** Outcome of pruning one user-plugin dependency (pnpm remove, or a test stub). */
+export interface RemoveDependencyResult {
+    readonly ok: boolean;
+    readonly detail: string;
 }
 /** The manager face the Remote service delegates to. */
 export interface InstalledManager {
@@ -76,6 +94,13 @@ export interface InstalledManager {
  * names are validated (no separators) before they reach this path.
  */
 export declare function pendingFilePath(profile: string, home?: string): string;
+/**
+ * Run `pnpm remove <name>` in the profile directory. The package name is
+ * shape-checked again here so a future caller cannot turn the spawn into a
+ * shell string; Windows uses `pnpm.cmd` without `shell`, so the argv stays
+ * argv. Network is not required for a remove of an already-fetched tree.
+ */
+export declare function spawnPnpmRemove(profileDir: string, packageName: string): Promise<RemoveDependencyResult>;
 /**
  * Create the manager over one profile directory.
  * @param options - profile identity, the live Loader, and the durable record seat.

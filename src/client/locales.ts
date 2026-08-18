@@ -125,7 +125,8 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
   'installed.chip': '已安装',
   'installed.count': '共 {count} 个',
   'installed.body': '这里列出当前 profile 通过包安装的插件。停用会写入本 profile 的补丁层并立即生效；'
-    + '卸载会先在本会话停用、再从安装清单移除，重启后完成清理。DSH 自带的插件不在此列。',
+    + '卸载用户插件会先停用，再在本 profile 里执行 pnpm remove（与官方 dsh plugin remove 相同），锁文件和 node_modules 一并清掉。'
+    + 'DSH 自带的插件不在此列。',
   'installed.loading': '正在读取已安装插件…',
   'installed.failed': '读取已安装插件失败：{reason}',
   'installed.empty': '还没有通过包安装的插件——从下面的市场挑一个，或运行 dsh plugin add。',
@@ -133,6 +134,10 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
   'installed.inBox': '由桌面客户端接入',
   'installed.inBoxNotice': '这是桌面客户端复制进本 profile 的，不是通过 dsh plugin add 安装的，'
     + '所以官方命令不会碰它——要移除只能从这里。若客户端仍装着且未关闭「接入内置插件市场」，它下次启动会重新接入。',
+  'installed.unregistered': '未接入层',
+  'installed.unregisteredState': '未加载',
+  'installed.unregisteredNotice': '已作为依赖装上，但没有写进 dsh.profile.bundles，当前不会加载。'
+    + '可以从这里卸载（会跑 pnpm remove）；要让它生效，请用官方 dsh plugin add 重装或把名字补进 bundles。',
   'installed.running': '运行中',
   'installed.installedState': '已安装',
   'installed.disabled': '已停用',
@@ -147,7 +152,7 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
   'installed.confirmUninstall': '确认卸载 {name}？',
   'installed.confirm': '确认卸载',
   'installed.cancel': '取消',
-  'installed.uninstalled': '已卸载 {name}，重启后完成清理。',
+  'installed.uninstalled': '已卸载 {name}。',
   'installed.actionFailed': '操作失败：{reason}',
   'installed.readFailed': '该包无法读取：{reason}',
   'installed.heldDown': '本会话中卸载过该插件，残留的停用行把它按住了——点「启用」即可恢复。',
@@ -269,8 +274,9 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
   'installed.chip': 'Installed',
   'installed.count': '{count} total',
   'installed.body': 'Plugins installed into this profile as packages. Disabling writes a row into the profile’s own'
-    + ' patch layer and takes effect immediately; uninstalling stops the plugin for this session and removes it from'
-    + ' the install manifest — a restart finishes the cleanup. Plugins shipped with DSH are not listed.',
+    + ' patch layer and takes effect immediately; uninstalling a user plugin stops it, then runs pnpm remove in this'
+    + ' profile (the same primitive as dsh plugin remove) so the lockfile and node_modules go with it.'
+    + ' Plugins shipped with DSH are not listed.',
   'installed.loading': 'Loading installed plugins…',
   'installed.failed': 'Could not read installed plugins: {reason}',
   'installed.empty': 'No plugin packages installed yet — pick one from the market below, or run dsh plugin add.',
@@ -280,6 +286,10 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
     + 'dsh plugin add, so the official command will not touch it — here is the only place it can be removed. '
     + 'If the client is still installed and still set to seat the marketplace, it will be seated again the '
     + 'next time the client starts; its connection settings hold that switch.',
+  'installed.unregistered': 'not in the stack',
+  'installed.unregisteredState': 'Not loaded',
+  'installed.unregisteredNotice': 'Installed as a dependency but missing from dsh.profile.bundles, so it is not loaded.'
+    + ' Uninstall from here runs pnpm remove; to load it, reinstall with dsh plugin add or add the name to bundles.',
   'installed.running': 'Running',
   'installed.installedState': 'Installed',
   'installed.disabled': 'Disabled',
@@ -294,7 +304,7 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
   'installed.confirmUninstall': 'Uninstall {name}?',
   'installed.confirm': 'Uninstall',
   'installed.cancel': 'Cancel',
-  'installed.uninstalled': '{name} uninstalled — a restart finishes the cleanup.',
+  'installed.uninstalled': '{name} uninstalled.',
   'installed.actionFailed': 'The action failed: {reason}',
   'installed.readFailed': 'This package could not be read: {reason}',
   'installed.heldDown': 'This plugin was uninstalled earlier this session; leftover stop rows are holding it down — Enable will clear them.',

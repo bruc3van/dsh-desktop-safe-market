@@ -20,13 +20,16 @@ import {
   readPatchList,
   readManifest,
   removeBundle,
+  removePackageInstallGate,
   repositorySlugOf,
   resolveProfileDir,
   setEntryDisabled,
+  unregisteredPlugins,
   userBundles,
+  writeManifest,
   type ProfileManifest,
 } from '../src/profile.ts'
-import { createInstalledManager, type PendingUninstall } from '../src/installed.ts'
+import { createInstalledManager, type PendingUninstall, type RemoveDependencyResult } from '../src/installed.ts'
 import { adoptDomainState, initialDomainState, safeMarketDomainState, type SafeMarketDomainState } from '../src/store.ts'
 import { describeInstalled, ownedBy, ownedIndexOf } from '../src/client/owned.ts'
 import {
@@ -127,14 +130,27 @@ async function manager(home: string, loader: Loader) {
   }
 }
 
+/** Simulate `pnpm remove`: drop the dep from package.json and the package dir. */
+async function simulatePnpmRemove(profileDir: string, packageName: string): Promise<RemoveDependencyResult> {
+  const manifest = await readManifest(profileDir)
+  if (manifest.dependencies !== undefined && Object.hasOwn(manifest.dependencies, packageName)) {
+    delete manifest.dependencies[packageName]
+    await writeManifest(profileDir, manifest)
+  }
+  await rm(join(profileDir, 'node_modules', packageName), { recursive: true, force: true })
+  return { ok: true, detail: '' }
+}
+
 /** The manager over a fixture home. */
-function makeManager(home: string, loader: Loader) {
+function makeManager(home: string, loader: Loader, extras: { removeDependency?: (name: string) => Promise<RemoveDependencyResult> } = {}) {
+  const profileDir = join(home, 'profiles', 'web')
   return createInstalledManager({
     profile: 'web',
     selfName: 'dsh-desktop-safe-market',
     loader,
     home,
     pendingFile: pendingFile(home),
+    removeDependency: extras.removeDependency ?? ((name) => simulatePnpmRemove(profileDir, name)),
   })
 }
 
@@ -165,6 +181,22 @@ test('userBundles excludes an in-box name that is not a profile dependency', () 
     dsh: { profile: { bundles: ['@deepseek-ai/dsh-base', 'dsh-desktop-safe-market', 'demo-plugin'] } },
   }
   assert.deepEqual(userBundles(manifest), ['demo-plugin'])
+})
+
+test('unregisteredPlugins lists a dsh.bundle dep that never joined the stack', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'whale-girl', '- insert:\n    - id: whale-girl\n      name: whale-girl\n')
+    const manifest = await readManifest(profileDir)
+    manifest.dependencies!['whale-girl'] = 'github:someone/whale-girl#deadbeef'
+    await writeManifest(profileDir, manifest)
+    assert.deepEqual(unregisteredPlugins(manifest, profileDir), ['whale-girl'])
+    assert.equal(userBundles(manifest).includes('whale-girl'), false)
+    // A plain library in dependencies is not a plugin.
+    assert.equal(unregisteredPlugins(manifest, profileDir).includes('zod'), false)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
 })
 
 test('removeBundle takes the dependency and the bundles seat, nothing else', () => {
@@ -449,19 +481,15 @@ test('uninstall edits the manifest, records the rows, and stops the entries', as
   try {
     await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
     const seat = stubLoader([{ id: 'include:demo-plugin', name: 'demo-plugin', fiberState: 2 }])
-    const built = createInstalledManager({
-      profile: 'web',
-      selfName: 'dsh-desktop-safe-market',
-      loader: seat.loader,
-      home,
-      pendingFile: pendingFile(home),
-    })
+    const built = makeManager(home, seat.loader)
     const result = await built.uninstall('demo-plugin')
     assert.equal(result.packages.length, 0, 'the package is gone from the list')
     assert.equal(result.notice, undefined, 'a clean uninstall has no outcome notice')
     const manifest = await readManifest(profileDir)
     assert.deepEqual(manifest.dsh!.profile!.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
     assert.equal('demo-plugin' in (manifest.dependencies ?? {}), false)
+    assert.equal(existsSync(join(profileDir, 'node_modules', 'demo-plugin')), false,
+      'pnpm remove (stub) takes the package directory, not just the manifest')
     assert.match(await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8'), /- id: demo-plugin\n  disabled: true/)
     assert.deepEqual((await readPending(home)).map(record => record.entryIds), [['demo-plugin']])
     assert.deepEqual(seat.updates, [{ id: 'include:demo-plugin', options: { disabled: true } }])
@@ -484,13 +512,7 @@ test('uninstall of self edits the manifest only', async () => {
     manifest.dependencies!['dsh-desktop-safe-market'] = '^0.2.0'
     await writeFile(join(profileDir, 'package.json'), JSON.stringify(manifest, undefined, 2) + '\n')
     const seat = stubLoader([{ id: 'include:dsh-desktop-safe-market', fiberState: 2 }])
-    const built = createInstalledManager({
-      profile: 'web',
-      selfName: 'dsh-desktop-safe-market',
-      loader: seat.loader,
-      home,
-      pendingFile: pendingFile(home),
-    })
+    const built = makeManager(home, seat.loader)
     await built.uninstall('dsh-desktop-safe-market')
     assert.deepEqual(await readPending(home), [])
     assert.deepEqual(seat.updates, [])
@@ -498,6 +520,119 @@ test('uninstall of self edits the manifest only', async () => {
     const after = await readManifest(profileDir)
     assert.deepEqual(after.dsh!.profile!.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app', 'demo-plugin'])
     assert.equal('dsh-desktop-safe-market' in (after.dependencies ?? {}), false)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('list surfaces an unregistered plugin so uninstall can reach it', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    await makeBundle(profileDir, 'whale-girl', '- insert:\n    - id: whale-girl\n      name: whale-girl\n')
+    const manifest = await readManifest(profileDir)
+    manifest.dependencies!['whale-girl'] = 'github:someone/whale-girl#deadbeef'
+    await writeManifest(profileDir, manifest)
+    const listed = await makeManager(home, stubLoader([]).loader).list()
+    const loose = listed.packages.find(row => row.packageName === 'whale-girl')
+    assert.ok(loose !== undefined, 'a dep that declares dsh.bundle must be listed even off the stack')
+    assert.equal(loose.unregistered, true)
+    assert.equal(loose.inBox, false)
+    assert.equal(listed.packages.find(row => row.packageName === 'demo-plugin')?.unregistered, false)
+    await assert.rejects(
+      makeManager(home, stubLoader([]).loader).setEnabled('whale-girl', true),
+      /not in the bundle stack/,
+    )
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('uninstall of an unregistered plugin runs pnpm remove', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    await makeBundle(profileDir, 'whale-girl', '- insert:\n    - id: whale-girl\n      name: whale-girl\n')
+    const manifest = await readManifest(profileDir)
+    manifest.dependencies!['whale-girl'] = 'github:someone/whale-girl#deadbeef'
+    await writeManifest(profileDir, manifest)
+    const removed: string[] = []
+    const built = makeManager(home, stubLoader([]).loader, {
+      removeDependency: async (name) => {
+        removed.push(name)
+        return await simulatePnpmRemove(profileDir, name)
+      },
+    })
+    const result = await built.uninstall('whale-girl')
+    assert.deepEqual(removed, ['whale-girl'])
+    assert.equal(result.packages.some(row => row.packageName === 'whale-girl'), false)
+    assert.equal('whale-girl' in ((await readManifest(profileDir)).dependencies ?? {}), false)
+    assert.equal(existsSync(join(profileDir, 'node_modules', 'whale-girl')), false)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('uninstall of a user plugin drops allowBuilds and exclude rows', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    await writeFile(join(profileDir, 'pnpm-workspace.yaml'),
+      'allowBuilds:\n  demo-plugin: true\n  node-pty: true\nminimumReleaseAgeExclude:\n  - demo-plugin@1.2.3\n  - other@0.1.0\n')
+    await makeManager(home, stubLoader([{ id: 'include:demo-plugin' }]).loader).uninstall('demo-plugin')
+    const after = await readFile(join(profileDir, 'pnpm-workspace.yaml'), 'utf8')
+    assert.equal(after.includes('demo-plugin'), false)
+    assert.match(after, /node-pty: true/)
+    assert.match(after, /other@0.1.0/)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('removePackageInstallGate is a no-op when the workspace file is missing', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    assert.equal(await removePackageInstallGate(profileDir, 'demo-plugin'), false)
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('pnpm failure still drops the bundle and names the prune', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    const built = makeManager(home, stubLoader([{ id: 'include:demo-plugin' }]).loader, {
+      removeDependency: async () => ({ ok: false, detail: 'pnpm not found on PATH' }),
+    })
+    const result = await built.uninstall('demo-plugin')
+    assert.match(result.notice ?? '', /pnpm remove: pnpm not found on PATH/)
+    const manifest = await readManifest(profileDir)
+    assert.equal('demo-plugin' in (manifest.dependencies ?? {}), false)
+    assert.equal(manifest.dsh?.profile?.bundles?.includes('demo-plugin'), false)
+    assert.equal(existsSync(join(profileDir, 'node_modules', 'demo-plugin')), true,
+      'a failed prune leaves the tree; the manifest edit is what finishes the uninstall')
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('uninstalling a desktop seat does not run pnpm remove', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    const seatDir = await makeDesktopSeat(home, 'dsh-desktop-safe-market',
+      '- insert:\n    - id: safe-market\n      name: dsh-desktop-safe-market\n')
+    await listBundle(profileDir, 'dsh-desktop-safe-market')
+    const removed: string[] = []
+    await makeManager(home, stubLoader([{ id: 'include:demo-plugin' }, { id: 'include:safe-market' }]).loader, {
+      removeDependency: async (name) => {
+        removed.push(name)
+        return { ok: true, detail: '' }
+      },
+    }).uninstall('dsh-desktop-safe-market')
+    assert.deepEqual(removed, [], 'in-box seats are not pnpm dependencies')
+    assert.equal(existsSync(seatDir), false)
   } finally {
     await rm(home, { recursive: true, force: true })
   }
@@ -529,13 +664,7 @@ test('uninstall survives a broken patch layer: manifest edited, no record, live 
   try {
     await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
     const seat = stubLoader([{ id: 'include:demo-plugin', name: 'demo-plugin', fiberState: 2 }])
-    const built = createInstalledManager({
-      profile: 'web',
-      selfName: 'dsh-desktop-safe-market',
-      loader: seat.loader,
-      home,
-      pendingFile: pendingFile(home),
-    })
+    const built = makeManager(home, seat.loader)
     await rm(join(profileDir, 'cordis.patch.yml'))
     await mkdir(join(profileDir, 'cordis.patch.yml'))
     // The manifest is the authoritative fact; the stop rows are a session
@@ -661,6 +790,7 @@ test('the installed wire codecs accept the real shapes and reject hostile ones',
       repository: 'demo/demo-plugin',
       self: false,
       inBox: false,
+      unregistered: false,
       enabled: true,
       entries: [{ id: 'demo-plugin', name: 'demo-plugin', present: true, enabled: true, phase: 'active' }],
       error: '',
@@ -786,6 +916,8 @@ function owned(overrides: Partial<MarketInstalledPackage>): MarketInstalledPacka
     description: '',
     repository: '',
     self: false,
+    inBox: false,
+    unregistered: false,
     enabled: true,
     entries: [],
     error: '',

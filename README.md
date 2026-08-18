@@ -75,7 +75,9 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 「插件」页顶部的**已安装面板**列出当前 profile 通过 `dsh plugin add` 装进来的插件包（同时写在 `dependencies` 与 `dsh.profile.bundles` 里的那些：版本、简介、每个 loader 条目的运行状态），**以及桌面客户端自动装进来的市场插件**。DSH 模板自带的层不在此列。提供两个动作：
 
 - **停用/启用**：往 profile 自己的 `cordis.patch.yml`（用户补丁层）写入/移除一行 `- id: <条目> / disabled: true`，同时直接推动 loader 条目——**立即生效，无需重启**，重启后依旧有效。market 自己那行不提供停用按钮：停用市场会连带停掉唯一能再启用它的界面。
-- **卸载**：从 profile 的 `package.json` 里移除依赖与 `dsh.profile.bundles` 层（下次启动不再组装它），并在本会话内先停用；重启后由插件自动收回那几行停用标记。收尾记录存放在 harness home 里插件自己的小文件（不依赖市场缓存域，域坏了记录也丢不了）；若本会话内的停用步骤失败，卸载提示会明说「可能运行到下次重启」。同一会话内重装刚卸载的插件会被残留停用行按住，卡片会提示「点启用即可恢复」。留在 `node_modules` 里的文件会失效，下次任何 `dsh plugin` 命令会顺带清掉。
+- **卸载**：用户插件会先在本会话停用，再于 profile 目录执行 `pnpm remove`（与官方 `dsh plugin remove` 同一原语），依赖、锁文件、`node_modules` 和 `dsh.profile.bundles` 一并去掉，并清掉该包在 `pnpm-workspace.yaml` 里的 `allowBuilds` / `minimumReleaseAgeExclude` 条目。内置座位没有 pnpm 树，卸载会撤 `bundles` 并删除带归属标记的副本。若 `pnpm remove` 失败，清单仍会改掉（下次启动不再加载），面板会说明磁盘未修剪。同一会话内重装刚卸载的插件会被残留停用行按住，卡片会提示「点启用即可恢复」。
+
+已安装列表也会列出「写在 `dependencies` 里、但没进 `dsh.profile.bundles`」的插件（装上了却不会加载），避免只能靠下次 `pnpm add` 才发现。这类包不能点启用，只能卸载。
 
 ### 桌面客户端装进来的市场插件
 
@@ -85,7 +87,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 
 如果客户端还装着、且没有关掉它连接设置里的「接入内置插件市场」，那么它下次启动会把插件重新装回。卡片上写明了这一点：要彻底不再出现，请在客户端那边关掉开关。没有归属标记的 in-box bundle 属于部署自身，面板不列出、也不提供卸载。
 
-设计上与「安全安装」一致：**本地文件编辑 + loader 调用，不启动进程、不联网**——面板读的全是本机事实。不过市场关掉时这一页只剩开关本身：你关掉的是这个市场，它不该继续在你的设置里开着一个插件管理器。
+设计上与「安全安装」一致：**停用、列表和内置座位仍是本地文件编辑 + loader 调用**。用户插件的卸载是唯一会启动进程的动词：在本 profile 目录跑 `pnpm remove`，不联网安装任何东西。市场关掉时这一页只剩开关本身：你关掉的是这个市场，它不该继续在你的设置里开着一个插件管理器。
 
 ![已安装面板](./assets/screenshots/marketplace-installed.png)
 
@@ -126,7 +128,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 - 卡片全部以纯文本渲染；
 - 关闭状态下 Remote 接口直接拒绝，无法绕过开关读取目录；
 - 安装交接全程走官方公开服务（workspaces / sessions / conversation），不读 DOM、不发送消息；
-- 已安装面板的动词只接受**经 wire codec 校验且实际在 profile 清单里的包名**，动作落地为本机文件编辑与 loader 调用，不启动进程；写入用户补丁层时保留原有注释与手工行。
+- 已安装面板的动词只接受**经 wire codec 校验且实际在 profile 清单里的包名**；停用与内置座位卸载落地为本机文件编辑与 loader 调用。用户插件卸载会在 profile 目录运行 `pnpm remove`（包名再经同一套形状校验，不走 shell 拼接），失败时仍改清单并在面板说明；写入用户补丁层时保留原有注释与手工行。
 
 **收录不代表安全背书。** Agent 的审查是一次有依据的辅助判断，不是结论——请自己看过再决定。
 

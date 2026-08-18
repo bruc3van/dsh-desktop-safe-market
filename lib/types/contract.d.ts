@@ -194,6 +194,12 @@ export interface MarketInstalledPackage {
      * dependency, and the client that seated it may be uninstalled by now.
      */
     readonly inBox: boolean;
+    /**
+     * In `dependencies` but not in `dsh.profile.bundles`: installed, not
+     * loaded. Listed so Uninstall can reach it; Enable cannot put it on the
+     * stack (that is `dsh plugin add`'s reconcile).
+     */
+    readonly unregistered: boolean;
     /** Package-level enablement: at least one of its entries is enabled. */
     readonly enabled: boolean;
     readonly entries: readonly MarketInstalledEntry[];
@@ -372,6 +378,7 @@ export declare const marketInstalledPackageSchema: z.ZodReadonly<z.ZodObject<{
     repository: z.ZodUnion<readonly [z.ZodString, z.ZodLiteral<"">]>;
     self: z.ZodBoolean;
     inBox: z.ZodBoolean;
+    unregistered: z.ZodBoolean;
     enabled: z.ZodBoolean;
     entries: z.ZodReadonly<z.ZodArray<z.ZodReadonly<z.ZodObject<{
         id: z.ZodString;
@@ -399,6 +406,7 @@ export declare const marketInstalledResultSchema: z.ZodReadonly<z.ZodObject<{
         repository: z.ZodUnion<readonly [z.ZodString, z.ZodLiteral<"">]>;
         self: z.ZodBoolean;
         inBox: z.ZodBoolean;
+        unregistered: z.ZodBoolean;
         enabled: z.ZodBoolean;
         entries: z.ZodReadonly<z.ZodArray<z.ZodReadonly<z.ZodObject<{
             id: z.ZodString;

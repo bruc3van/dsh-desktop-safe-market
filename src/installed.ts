@@ -8,34 +8,42 @@
  * remove it: the official CLI will not touch a name that is not a profile
  * dependency, and the client that seated it may be uninstalled by now.
  *
- * - **list** reads the profile manifest's user bundles, joins each bundle's
- *   patch-declared entry ids against the live Loader tree, and reports the
- *   package-level enable state the panel toggles.
+ * - **list** reads the profile manifest's user bundles (and any plugin still
+ *   in `dependencies` but missing from `dsh.profile.bundles`, so a failed
+ *   reconcile cannot hide from uninstall), joins each bundle's patch-declared
+ *   entry ids against the live Loader tree, and reports the package-level
+ *   enable state the panel toggles.
  * - **setEnabled** writes (or removes) `disabled: true` rows in the profile's
  *   own patch layer — the durable seat the launcher recomposes from on every
  *   boot — and then nudges the live entries directly, so the change takes
  *   effect now even on a launcher without the patch-file watcher. The two
  *   paths are idempotent against each other: whichever lands second finds no
  *   diff left to apply.
- * - **uninstall** removes the bundle from the manifest (the next boot simply
- *   never composes it), stops its entries for the rest of this session with
- *   the same disable-row mechanism — which also keeps a mid-session
- *   patch-file recompose from reviving them — and records the rows it wrote
- *   (a small file seat under the harness home, independent of the storage
- *   domain) so the next boot's {@link InstalledManager.sweep} can take them
- *   back out of the user's file once the entries they target no longer
- *   exist.
+ * - **uninstall** stops the entries for the rest of this session (same
+ *   disable-row mechanism, so a mid-session patch-file recompose cannot
+ *   revive them) and records the rows it wrote so the next boot's
+ *   {@link InstalledManager.sweep} can take them back out of the user's
+ *   patch file. For a user plugin it then runs `pnpm remove` in the profile
+ *   directory — the same primitive official `dsh plugin remove` forwards to
+ *   — so the lockfile and `node_modules` go with the manifest edit; an
+ *   in-box seat has no pnpm tree and is removed by deleting its copy. A
+ *   failed pnpm run still drops the name from the manifest (next boot will
+ *   not compose it) and the result notice names the prune fault.
  *
- * Nothing here spawns a process or touches the network: every effect is a
- * local file edit plus an in-process Loader call.
+ * Listing, enable, disable, and in-box uninstall stay local file edits plus
+ * an in-process Loader call. User-plugin uninstall is the one verb that
+ * spawns: `pnpm remove` against the profile directory, never the network
+ * as an install.
  */
 import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
+import { spawn } from 'node:child_process'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
-import type {
-  MarketInstalledEntry,
-  MarketInstalledPackage,
-  MarketInstalledResult,
+import {
+  PACKAGE_NAME_PATTERN,
+  type MarketInstalledEntry,
+  type MarketInstalledPackage,
+  type MarketInstalledResult,
 } from './contract.ts'
 import {
   PROFILE_PATCH_FILENAME,
@@ -45,9 +53,11 @@ import {
   readBundleInfo,
   readManifest,
   removeBundle,
+  removePackageInstallGate,
   resolveDshHome,
   resolveProfileDir,
   setEntryDisabled,
+  unregisteredPlugins,
   userBundles,
   writeManifest,
   type ProfileManifest,
@@ -80,6 +90,19 @@ export interface InstalledManagerOptions {
    * losing the record is what strands stop rows in the user's patch file.
    */
   readonly pendingFile?: string
+  /**
+   * Drop a user-plugin dependency from the profile install tree. Defaults to
+   * `pnpm remove` in the profile directory (what official `dsh plugin remove`
+   * forwards to). Tests inject a stub so they do not need a real pnpm project.
+   * In-box seats never call this: they are not dependencies.
+   */
+  readonly removeDependency?: (packageName: string) => Promise<RemoveDependencyResult>
+}
+
+/** Outcome of pruning one user-plugin dependency (pnpm remove, or a test stub). */
+export interface RemoveDependencyResult {
+  readonly ok: boolean
+  readonly detail: string
 }
 
 /** The manager face the Remote service delegates to. */
@@ -152,6 +175,70 @@ async function writePendingFile(file: string, next: readonly PendingUninstall[])
   await atomicWrite(file, JSON.stringify(next, undefined, 2) + '\n')
 }
 
+/** How long `pnpm remove` may run before the uninstall notice names a timeout. */
+const PNPM_REMOVE_MS = 180_000
+
+/** Cap captured pnpm output so a failed remove cannot flood the panel notice. */
+const PNPM_OUTPUT_LIMIT = 8_192
+
+/**
+ * Run `pnpm remove <name>` in the profile directory. The package name is
+ * shape-checked again here so a future caller cannot turn the spawn into a
+ * shell string; Windows uses `pnpm.cmd` without `shell`, so the argv stays
+ * argv. Network is not required for a remove of an already-fetched tree.
+ */
+export function spawnPnpmRemove(profileDir: string, packageName: string): Promise<RemoveDependencyResult> {
+  if (!PACKAGE_NAME_PATTERN.test(packageName)) {
+    return Promise.resolve({ ok: false, detail: 'refusing to spawn pnpm with a name that is not an npm package' })
+  }
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (result: RemoveDependencyResult): void => {
+      if (settled) return
+      settled = true
+      resolve(result)
+    }
+    const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
+    const child = spawn(command, ['remove', packageName], {
+      cwd: profileDir,
+      env: { ...process.env, CI: process.env.CI ?? 'true' },
+      windowsHide: true,
+    })
+    let output = ''
+    const append = (chunk: Buffer): void => {
+      if (output.length >= PNPM_OUTPUT_LIMIT) return
+      output += chunk.toString('utf8')
+      if (output.length > PNPM_OUTPUT_LIMIT) output = output.slice(-PNPM_OUTPUT_LIMIT)
+    }
+    child.stdout?.on('data', append)
+    child.stderr?.on('data', append)
+    const timer = setTimeout(() => {
+      child.kill()
+      finish({ ok: false, detail: `pnpm remove timed out after ${String(PNPM_REMOVE_MS / 1000)}s` })
+    }, PNPM_REMOVE_MS)
+    child.once('error', (error) => {
+      clearTimeout(timer)
+      const code = (error as NodeJS.ErrnoException).code
+      finish({
+        ok: false,
+        detail: code === 'ENOENT' ? 'pnpm not found on PATH' : messageOf(error),
+      })
+    })
+    child.once('close', (status) => {
+      clearTimeout(timer)
+      if (status === 0) {
+        finish({ ok: true, detail: '' })
+        return
+      }
+      const clipped = output.replace(/\s+/g, ' ').trim()
+      finish({
+        ok: false,
+        detail: clipped !== '' ? clipped : `pnpm remove exited ${String(status)}`,
+      })
+    })
+  })
+}
+
 /**
  * Create the manager over one profile directory.
  * @param options - profile identity, the live Loader, and the durable record seat.
@@ -162,6 +249,8 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
   const pendingPath = options.pendingFile ?? pendingFilePath(options.profile, options.home ?? resolveDshHome())
   const readPending = (): Promise<PendingUninstall[]> => readPendingFile(pendingPath)
   const writePending = (next: readonly PendingUninstall[]): Promise<void> => writePendingFile(pendingPath, next)
+  const removeDependency = options.removeDependency
+    ?? ((packageName: string) => spawnPnpmRemove(profileDir, packageName))
 
   /** The live entry map, keyed by the ids the Loader reports (`include:<id>` for composed rows). */
   const liveEntries = (): Map<string, Entry> => {
@@ -175,17 +264,21 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     map.get(`include:${id}`) ?? map.get(id)
 
   /**
-   * What the panel manages: the packages installed as profile dependencies,
-   * plus any in-box seat the desktop client marked as its own. The second
-   * group is listed so it can be removed — nothing else can remove it, and
-   * `seats` keeps it separate so the verbs know a seat has no dependency to
-   * take away.
+   * What the panel manages: packages in both `dependencies` and `bundles`,
+   * plugin deps that never joined the bundle stack (so uninstall can reach
+   * them), plus any in-box seat the desktop client marked as its own.
    */
-  const readUserBundles = async (): Promise<{ manifest: ProfileManifest; bundles: string[]; seats: string[] }> => {
+  const readUserBundles = async (): Promise<{
+    manifest: ProfileManifest
+    bundles: string[]
+    unregistered: string[]
+    seats: string[]
+  }> => {
     const manifest = await readManifest(profileDir)
     return {
       manifest,
       bundles: userBundles(manifest),
+      unregistered: unregisteredPlugins(manifest, profileDir),
       seats: desktopSeatBundles(manifest, profileDir),
     }
   }
@@ -225,9 +318,10 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
 
   async function list(): Promise<MarketInstalledResult> {
     let bundles: string[]
+    let unregistered: string[]
     let seats: string[]
     try {
-      ;({ bundles, seats } = await readUserBundles())
+      ;({ bundles, unregistered, seats } = await readUserBundles())
     } catch (error) {
       return { packages: [], profile: options.profile, error: messageOf(error) }
     }
@@ -239,8 +333,10 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
       pending.some(record => record.packageName === packageName && record.entryIds.length > 0)
     const live = liveEntries()
     const packages: MarketInstalledPackage[] = []
-    for (const packageName of [...bundles, ...seats]) {
-      const inBox = seats.includes(packageName)
+    const seen = new Set<string>()
+    const pushPackage = async (packageName: string, flags: { inBox: boolean; unregistered: boolean }): Promise<void> => {
+      if (seen.has(packageName)) return
+      seen.add(packageName)
       const self = packageName === options.selfName
       try {
         const info = await readBundleInfo(profileDir, packageName)
@@ -260,7 +356,8 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
           description: info.description,
           repository: info.repository,
           self,
-          inBox,
+          inBox: flags.inBox,
+          unregistered: flags.unregistered,
           enabled: entries.some(entry => entry.enabled),
           entries,
           error: '',
@@ -270,9 +367,16 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
         // A bundle whose package vanished from node_modules is still an
         // install fact: list it, say why it cannot be read, and let the user
         // uninstall the residue.
-        packages.push({ packageName, version: '', description: '', repository: '', self, inBox, enabled: false, entries: [], error: messageOf(error), heldDown: heldDown(packageName) })
+        packages.push({
+          packageName, version: '', description: '', repository: '', self,
+          inBox: flags.inBox, unregistered: flags.unregistered, enabled: false, entries: [],
+          error: messageOf(error), heldDown: heldDown(packageName),
+        })
       }
     }
+    for (const packageName of bundles) await pushPackage(packageName, { inBox: false, unregistered: false })
+    for (const packageName of unregistered) await pushPackage(packageName, { inBox: false, unregistered: true })
+    for (const packageName of seats) await pushPackage(packageName, { inBox: true, unregistered: false })
     return { packages, profile: options.profile, error: '' }
   }
 
@@ -287,7 +391,12 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     // cares how the package arrived. Accepting only dependencies would leave
     // the panel showing a switch the Host refuses, which is worse than either
     // offering it or hiding it.
-    const { bundles, seats } = await readUserBundles()
+    const { bundles, unregistered, seats } = await readUserBundles()
+    if (unregistered.includes(packageName) && !bundles.includes(packageName) && !seats.includes(packageName)) {
+      throw new Error(
+        `${packageName} is installed as a dependency but is not in the bundle stack — Enable cannot load it; Uninstall will remove it`,
+      )
+    }
     assertInstalled([...bundles, ...seats], packageName)
     const info = await readBundleInfo(profileDir, packageName)
     const ids = info.entries.map(entry => entry.id)
@@ -308,9 +417,9 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
   }
 
   async function uninstall(packageName: string): Promise<MarketInstalledResult> {
-    const { manifest, bundles, seats } = await readUserBundles()
+    const { bundles, unregistered, seats } = await readUserBundles()
     const inBox = seats.includes(packageName)
-    assertInstalled(inBox ? seats : bundles, packageName)
+    assertInstalled(inBox ? seats : [...bundles, ...unregistered], packageName)
     // An in-box seat has no dependency to drop and no pnpm-managed tree to
     // leave behind: the directory IS the install, and it was put there by a
     // client that may no longer exist to take it back. Removing the files is
@@ -319,31 +428,17 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     const self = packageName === options.selfName
     const info = await readBundleInfo(profileDir, packageName).catch(() => ({ version: '', description: '', repository: '', entries: [] as { id: string; name: string }[] }))
     const ids = info.entries.map(entry => entry.id)
-    if (!removeBundle(manifest, packageName)) {
-      throw new Error(`${packageName} is listed as a bundle but nothing removable was found`)
-    }
-    // The manifest is the authoritative fact of an uninstall: once it is
-    // written, the next boot never composes the bundle, so every later step
-    // is a best-effort session nicety rather than something worth failing
-    // the verb (and blocking a retry) over. But "best-effort" is not
-    // "silent": a stop that cannot land means the plugin keeps running this
-    // session, and a plugin whose selling point is review-before-install
-    // should say so — the result notice carries every fault.
-    await writeManifest(profileDir, manifest)
-    const stopFaults: string[] = []
+    const faults: string[] = []
+    // Stop first: a live plugin holds files open, and on Windows that is
+    // what makes `pnpm remove` fail EBUSY. Self-uninstall skips the stop —
+    // this fiber is the one answering the call.
     if (!self && ids.length > 0) {
-      // Stop the entries for the rest of this session and keep them stopped
-      // across mid-session recomposes (the bundle's insert rows stay in the
-      // booted layer stack until the next boot). The rows are ours: the next
-      // boot's sweep takes them back once the composition no longer carries
-      // the entries they target — so the sweep record is written only when
-      // the rows actually landed.
       let rowsWritten = false
       try {
         await setEntryDisabled(patchPath, ids, true)
         rowsWritten = true
       } catch (error) {
-        stopFaults.push('stop rows: ' + messageOf(error))
+        faults.push('stop rows: ' + messageOf(error))
         console.warn('[dsh-desktop-safe-market] uninstall stop rows failed:', error)
       }
       if (rowsWritten) {
@@ -351,42 +446,65 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
           const pending = (await readPending()).filter(record => record.packageName !== packageName)
           await writePending([...pending, { packageName, entryIds: ids, at: new Date().toISOString() }])
         } catch (error) {
-          // Orphan rows — a record the boot sweep can never find — would hold
-          // a reinstall down forever; the notice names the fault.
-          stopFaults.push('sweep record: ' + messageOf(error))
+          faults.push('sweep record: ' + messageOf(error))
           console.warn('[dsh-desktop-safe-market] uninstall sweep record failed:', error)
         }
       }
       try {
         await applyLive(ids, false)
       } catch (error) {
-        // Stopping now is best-effort: the disable rows already hold the
-        // entries down, and the manifest edit finishes the uninstall on boot.
-        stopFaults.push('live stop: ' + messageOf(error))
+        faults.push('live stop: ' + messageOf(error))
       }
     }
-    if (seatDir !== undefined) {
+    if (inBox) {
+      const manifest = await readManifest(profileDir)
+      if (!removeBundle(manifest, packageName)) {
+        throw new Error(`${packageName} is listed as a bundle but nothing removable was found`)
+      }
+      await writeManifest(profileDir, manifest)
+      if (seatDir !== undefined) {
+        try {
+          await rm(seatDir, { recursive: true, force: true })
+        } catch (error) {
+          faults.push('seat directory: ' + messageOf(error))
+        }
+      }
+    } else {
+      // Official `dsh plugin remove` is `pnpm remove` then reconcile. Do the
+      // same: prune the tree while the name is still a dependency, then drop
+      // any leftover `bundles` seat against a fresh read. pnpm failure is
+      // not a failed uninstall — the manifest edit still keeps the next boot
+      // from composing it; the notice tells the user the tree was not pruned.
       try {
-        await rm(seatDir, { recursive: true, force: true })
+        const pruned = await removeDependency(packageName)
+        if (!pruned.ok) faults.push('pnpm remove: ' + pruned.detail)
       } catch (error) {
-        // The manifest edit already finished the uninstall; a directory left
-        // behind is inert (nothing lists it) but it is still ours to name.
-        stopFaults.push('seat directory: ' + messageOf(error))
+        faults.push('pnpm remove: ' + messageOf(error))
+        console.warn('[dsh-desktop-safe-market] uninstall pnpm remove failed:', error)
+      }
+      try {
+        const after = await readManifest(profileDir)
+        if (removeBundle(after, packageName)) await writeManifest(profileDir, after)
+      } catch (error) {
+        faults.push('manifest: ' + messageOf(error))
+        console.warn('[dsh-desktop-safe-market] uninstall manifest edit failed:', error)
+      }
+      try {
+        await removePackageInstallGate(profileDir, packageName)
+      } catch (error) {
+        faults.push('install gate: ' + messageOf(error))
+        console.warn('[dsh-desktop-safe-market] uninstall install-gate cleanup failed:', error)
       }
     }
-    // Self-uninstall skips the STOP rows — this fiber is the one answering the
-    // call, and the bundle layer simply never composes on the next boot. It
-    // does not skip removing the copy: for a seat the directory IS the
-    // install, and leaving it behind after taking the name out of `bundles`
-    // would strand a plugin tree that nothing lists, nothing loads, and
-    // nothing can offer to remove ever again (the panel finds seats through
-    // the bundle list). Deleting the running plugin's own directory is safe:
-    // its modules are resolved and cached in memory by the time this runs.
     const result = await list()
-    if (stopFaults.length === 0) return result
+    if (faults.length === 0) return result
+    const mayRun = faults.some(fault =>
+      fault.startsWith('stop rows:') || fault.startsWith('live stop:') || fault.startsWith('sweep record:'))
     return {
       ...result,
-      notice: packageName + ' is removed from the profile but may keep running until the next restart (' + stopFaults.join('; ') + ')',
+      notice: mayRun
+        ? packageName + ' is removed from the profile but may keep running until the next restart (' + faults.join('; ') + ')'
+        : packageName + ' is removed from the profile (' + faults.join('; ') + ')',
     }
   }
 

@@ -216,6 +216,12 @@ export interface MarketInstalledPackage {
    * dependency, and the client that seated it may be uninstalled by now.
    */
   readonly inBox: boolean
+  /**
+   * In `dependencies` but not in `dsh.profile.bundles`: installed, not
+   * loaded. Listed so Uninstall can reach it; Enable cannot put it on the
+   * stack (that is `dsh plugin add`'s reconcile).
+   */
+  readonly unregistered: boolean
   /** Package-level enablement: at least one of its entries is enabled. */
   readonly enabled: boolean
   readonly entries: readonly MarketInstalledEntry[]
@@ -358,6 +364,7 @@ export const marketInstalledPackageSchema = z.object({
   repository: z.union([z.string().regex(REPOSITORY_SLUG_PATTERN), z.literal('')]),
   self: z.boolean(),
   inBox: z.boolean(),
+  unregistered: z.boolean(),
   enabled: z.boolean(),
   entries: z.array(marketInstalledEntrySchema).readonly(),
   error: z.string(),

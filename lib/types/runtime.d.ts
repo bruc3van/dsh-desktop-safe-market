@@ -78,9 +78,11 @@ export declare class SafeMarketRuntime extends TypertRemoteService {
      */
     setInstalledEnabled(update: SetInstalledEnabledUpdate): Promise<MarketInstalledResult>;
     /**
-     * Uninstall one installed package: out of the profile manifest (the next
-     * boot never composes it), stopped for the rest of this session. The next
-     * boot's sweep takes the stop rows back out of the user's patch file.
+     * Uninstall one installed package. A user plugin is stopped, then pruned
+     * with `pnpm remove` (lockfile and `node_modules` included); an in-box
+     * seat is dropped from the manifest and its copied directory is deleted.
+     * The next boot's sweep takes the stop rows back out of the user's patch
+     * file.
      */
     uninstallInstalled(update: UninstallInstalledUpdate): Promise<MarketInstalledResult>;
 }

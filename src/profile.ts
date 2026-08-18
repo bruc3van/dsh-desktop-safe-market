@@ -218,11 +218,93 @@ export function userBundles(manifest: ProfileManifest): string[] {
 }
 
 /**
+ * Whether a resolvable dependency declares a `dsh.bundle` patch — i.e. is a
+ * plugin, not a plain library sitting in `dependencies`.
+ */
+export function declaresBundle(profileDir: string, packageName: string): boolean {
+  const dir = packageDirFromProfile(profileDir, packageName)
+  if (dir === undefined) return false
+  try {
+    const parsed = JSON.parse(readFileSync(join(dir, 'package.json'), 'utf8')) as ProfileManifest
+    const declared = parsed.dsh?.bundle?.patch
+    return typeof declared === 'string' && declared !== ''
+  } catch {
+    return false
+  }
+}
+
+/**
+ * Plugin packages that sit in `dependencies` but not in `dsh.profile.bundles`.
+ * They are installed but not composed — the whale-girl shape: pnpm wrote the
+ * dep, reconcile never registered the layer. Listed so the panel can uninstall
+ * them; plain libraries (zod and friends) stay out.
+ */
+export function unregisteredPlugins(manifest: ProfileManifest, profileDir: string): string[] {
+  const bundles = manifest.dsh?.profile?.bundles
+  const inStack = new Set(Array.isArray(bundles) ? bundles.filter(name => typeof name === 'string') : [])
+  const dependencies = manifest.dependencies ?? {}
+  return Object.keys(dependencies).filter(name =>
+    !SHIPPED_BUNDLES.has(name)
+    && !inStack.has(name)
+    && declaresBundle(profileDir, name))
+}
+
+/** The profile's pnpm workspace file: `allowBuilds` and `minimumReleaseAgeExclude`. */
+export const PROFILE_WORKSPACE_FILENAME = 'pnpm-workspace.yaml'
+
+/**
+ * Drop one package's leftover install-gate entries from the profile's
+ * `pnpm-workspace.yaml`: its `allowBuilds` key, and any
+ * `minimumReleaseAgeExclude` row that names it. Other keys and comments stay.
+ * A missing file is a no-op.
+ * @returns true when the file changed.
+ */
+export async function removePackageInstallGate(profileDir: string, packageName: string): Promise<boolean> {
+  const file = join(profileDir, PROFILE_WORKSPACE_FILENAME)
+  let content = ''
+  try {
+    content = await readFile(file, 'utf8')
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === 'ENOENT') return false
+    throw error
+  }
+  const doc = parseDocument(content, { customTags: [jsExprTag] })
+  if (doc.errors.length > 0) {
+    throw new Error(`cannot edit workspace file ${file}: ${doc.errors[0]!.message}`)
+  }
+  if (doc.contents === null || !isMap(doc.contents)) return false
+  let changed = false
+  const allowBuilds = doc.contents.get('allowBuilds')
+  if (isMap(allowBuilds) && allowBuilds.has(packageName)) {
+    allowBuilds.delete(packageName)
+    changed = true
+  }
+  const exclude = doc.contents.get('minimumReleaseAgeExclude')
+  if (isSeq(exclude)) {
+    const prefix = packageName + '@'
+    for (let index = exclude.items.length - 1; index >= 0; index -= 1) {
+      const item = exclude.items[index]
+      if (!isScalar(item)) continue
+      const value = String(item.value ?? '')
+      if (value === packageName || value.startsWith(prefix)) {
+        exclude.items.splice(index, 1)
+        changed = true
+      }
+    }
+  }
+  if (!changed) return false
+  let output = doc.toString()
+  if (!output.endsWith('\n')) output += '\n'
+  await atomicWrite(file, output)
+  return true
+}
+
+/**
  * Remove one bundle from the manifest: its dependency entry and its
  * `dsh.profile.bundles` seat, the exact two facts the next boot's composition
- * and the CLI's reconcile read. Leftover files under `node_modules` become
- * inert the moment the layer is gone and are pruned by the next
- * `dsh plugin` command's pnpm run.
+ * and the CLI's reconcile read. For a user plugin the manager also runs
+ * `pnpm remove` so the lockfile and `node_modules` go with them; this helper
+ * is the manifest half, and the fallback when pnpm cannot run.
  * @returns true when the manifest changed.
  */
 export function removeBundle(manifest: ProfileManifest, packageName: string): boolean {

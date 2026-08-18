@@ -75,7 +75,9 @@ The join is the installed package's `repository` field (every npm spelling is re
 The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry — **and the marketplace plugin the desktop client placed**. Layers shipped with the DSH profile template are not listed. Two actions:
 
 - **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
-- **Uninstall** removes the dependency and the `dsh.profile.bundles` layer from the profile's `package.json` (the next boot simply never composes it) and stops the plugin for the rest of the session; on the next boot the plugin takes those stop rows back out of your patch file. The sweep record lives in a small plugin-owned file under the harness home — not the market's cache domain, so a broken domain cannot strand the rows; when the in-session stop fails, the uninstall notice says the plugin may run until the next restart. A plugin uninstalled and reinstalled within one session is held down by the leftover rows, and its card explains that Enable will clear them. Files left in `node_modules` become inert and are pruned by the next `dsh plugin` command.
+- **Uninstall** stops a user plugin for this session, then runs `pnpm remove` in the profile directory (the same primitive official `dsh plugin remove` forwards to), so the dependency, lockfile, `node_modules`, and `dsh.profile.bundles` entry go together, along with that package's leftover `allowBuilds` / `minimumReleaseAgeExclude` rows in `pnpm-workspace.yaml`. An in-box seat has no pnpm tree: uninstall drops the `bundles` entry and deletes the marked copy. If `pnpm remove` fails, the manifest is still edited (the next boot will not compose it) and the panel names the prune fault. A plugin uninstalled and reinstalled within one session is held down by leftover stop rows, and its card explains that Enable will clear them.
+
+The list also shows plugins that sit in `dependencies` but never joined `dsh.profile.bundles` (installed, not loaded), so they can be uninstalled from here. Enable is not offered for those rows.
 
 ### The marketplace plugin placed by the desktop client
 
@@ -85,7 +87,7 @@ The copy is never written as a dependency — the directory itself IS the instal
 
 If the client is still installed and still set to install the marketplace, it will put the plugin back the next time it starts; the card says so. To stop it coming back, turn the switch off in the client's connection settings. An in-box bundle with no ownership marker belongs to the deployment itself: it is neither listed nor removable here.
 
-By design it matches "review and install": **local file edits plus loader calls — no process spawned, no network** — the panel reads only this machine's own facts. With the market switched off, though, the page is the switch and nothing else: what you turned off is this marketplace, and it should not keep a plugin manager running in your settings.
+By design it matches "review and install": **disable, listing, and in-box uninstall stay local file edits plus loader calls**. Uninstall of a user plugin is the one verb that spawns: `pnpm remove` in this profile directory, never an install over the network. With the market switched off, though, the page is the switch and nothing else: what you turned off is this marketplace, and it should not keep a plugin manager running in your settings.
 
 ![The installed panel](./assets/screenshots/marketplace-installed.png)
 
@@ -126,7 +128,7 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 - every card renders as plain text;
 - while disabled, the Remote refuses — the catalog cannot be read around the switch;
 - the install hand-off runs entirely through published services (workspaces / sessions / conversation): it reads no DOM and sends no message;
-- the installed-panel verbs accept only **wire-codec-checked package names that are actually in the profile manifest**, and land as local file edits plus loader calls with no process spawned; edits to your patch layer preserve existing comments and hand-written rows.
+- the installed-panel verbs accept only **wire-codec-checked package names that are actually in the profile manifest**; disable and in-box uninstall land as local file edits plus loader calls. Uninstall of a user plugin runs `pnpm remove` in the profile directory (the name is shape-checked again, never interpolated into a shell); a failed prune still edits the manifest and the panel says so; edits to your patch layer preserve existing comments and hand-written rows.
 
 **Being listed is not a safety endorsement.** The agent's review is an informed second opinion, not a verdict — read it yourself before deciding.
 

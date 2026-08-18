@@ -480,7 +480,8 @@ export const cssText = `
 .dsh_market_installedState[data-state="running"] {
   color: var(--dsw-alias-state-success-primary, var(--dsw-alias-state-business-primary));
 }
-.dsh_market_installedState[data-state="disabled"] {
+.dsh_market_installedState[data-state="disabled"],
+.dsh_market_installedState[data-state="unregistered"] {
   color: var(--dsw-alias-label-tertiary);
 }
 .dsh_market_installedState[data-state="failed"],
