@@ -504,6 +504,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
       <div className="dsh_market_page">
         <div className="dsh_market_intro">
           <p className="dsh_market_introTitle">{t('intro.title')}</p>
+          <p className="dsh_market_introSlogan">{t('intro.slogan')}</p>
           <p className="dsh_market_introBody">{t('intro.body')}</p>
           <p className="dsh_market_disclaimer">{t('intro.disclaimer')}</p>
           <div className="dsh_market_introActions">
@@ -577,6 +578,9 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
 
   return (
     <div className="dsh_market_page">
+      {/* The tagline persists past the switch: it is the market's own line,
+          and the enabled page is where most of the time is spent. */}
+      <p className="dsh_market_pageSlogan">{t('intro.slogan')}</p>
       {/* Says the prerequisite out loud before a click runs into it, and
           offers the same one action the cards do. It does not block browsing:
           the shortlist is worth reading without a workspace. */}

@@ -99,6 +99,14 @@ export const cssText = `
   font-weight: 600;
   line-height: 22px;
 }
+.dsh_market_introSlogan,
+.dsh_market_pageSlogan {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
 .dsh_market_introBody,
 .dsh_market_disclaimer {
   margin: 0;
