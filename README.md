@@ -1,5 +1,7 @@
 # dsh-desktop-safe-market
 
+**深度扫描 5 分钟，放心使用每一天。**
+
 中文 | [English](./README_EN.md)
 
 一个**先审查、再安装**的 DeepSeek Harness 插件市场。它与「点一下就装」的普通市场刻意保持距离，差异集中在两件事：
@@ -23,13 +25,13 @@
 ## 安装
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.10.tar.gz
 ```
 
 也可以把安装这件事直接交给你的 Agent——复制这句提示词发过去即可：
 
 ```text
-帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
+帮我安装 DSH 插件市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.10.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -54,7 +56,7 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<commit sha>>
 ```
 
-从源码装会被 pnpm 的 `allowBuilds` 门禁拦下——这是「允许该仓库的代码在安装时于你的机器上执行」的授权，提示词要求 Agent 把 pnpm 打印的键原样交给你确认、写进 profile 的 `pnpm-workspace.yaml` 后再重跑。`dsh` 命令由 Agent 自己定位并执行，不需要你替它跑：先查环境变量，再看默认安装目录与 npm/pnpm 全局 bin，最精确的是取正在运行、监听 1466 端口的 dsh 进程的可执行文件路径。装完用 `dsh plugin --profile web list` 确认实际装的版本即可，然后告诉你重启 dsh 才会生效。
+从源码装会被 pnpm 的 `allowBuilds` 门禁拦下——这是「允许该仓库的代码在安装时于你的机器上执行」的授权，提示词要求 Agent 把 pnpm 打印的键原样交给你确认、写进 profile 的 `pnpm-workspace.yaml` 后再重跑。`dsh` 命令由 Agent 自己定位并执行，不需要你替它跑：最精确的是直接取正在运行的 dsh 进程（按进程名找——进程名不一定是 dsh，可能是 node 或客户端进程——不要假设固定端口）的可执行文件路径，找不到再依次查环境变量、默认安装目录与 npm/pnpm 全局 bin。全程只查这些常规位置，不做全盘扫描、不提权（sudo / 以管理员运行）。装完用 `dsh plugin --profile web list` 确认实际装的版本即可，然后告诉你重启 dsh 才会生效。
 
 发不发送由你按回车决定。没有任何工作区时，卡片会直接告诉你先去侧边栏选一个。
 

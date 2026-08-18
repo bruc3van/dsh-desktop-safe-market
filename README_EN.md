@@ -1,5 +1,7 @@
 # dsh-desktop-safe-market
 
+**A deep scan in 5 minutes — use with confidence every day.**
+
 [中文](./README.md) | English
 
 A **review-before-install** extension marketplace for the DeepSeek Harness web GUI. It deliberately differs from click-to-install marketplaces on two counts:
@@ -23,13 +25,13 @@ This plugin joins the two halves: a community shortlist that has **already had t
 ## Install
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.10.tar.gz
 ```
 
 Or hand the install to your agent — copy this one-line prompt:
 
 ```text
-Install the DSH plugin market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.9.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
+Install the DSH plugin market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.10.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -54,7 +56,7 @@ The prompt opens by stating its scope: **the only purpose is the security review
 dsh plugin --profile web add <npm package | tarball URL | github:owner/name#<commit sha>>
 ```
 
-A source install is blocked by pnpm's `allowBuilds` gate — permission for the repository's code to run on your machine at install time — and the prompt has the agent hand pnpm's printed key to you verbatim, wait for it to land in the profile's `pnpm-workspace.yaml`, and re-run. The agent locates and runs `dsh` itself — you are never asked to run commands: it checks the environment variables first, then the default installation directory and the npm/pnpm global bin, and, most precisely, takes the executable path of the running dsh process listening on port 1466. It confirms the install with `dsh plugin --profile web list` and then tells you dsh must be restarted before the plugin loads.
+A source install is blocked by pnpm's `allowBuilds` gate — permission for the repository's code to run on your machine at install time — and the prompt has the agent hand pnpm's printed key to you verbatim, wait for it to land in the profile's `pnpm-workspace.yaml`, and re-run. The agent locates and runs `dsh` itself — you are never asked to run commands: most precisely, it takes the executable path of the running dsh process (found by process name — which need not be `dsh`, it can be node or the client's own process — with no fixed port assumed); failing that, it checks the environment variables, then the default installation directory and the npm/pnpm global bin. It stays in those usual spots — no whole-disk scans, no elevation (no sudo, no run-as-administrator). It confirms the install with `dsh plugin --profile web list` and then tells you dsh must be restarted before the plugin loads.
 
 Whether it is sent is your Enter key. With no workspace at all, the card says so and points you at the sidebar.
 
