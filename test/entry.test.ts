@@ -155,7 +155,7 @@ test('a body that loads and starts hands its own disposer back', async () => {
     const disposer = await seat as () => void
     const body = await import(pathToFileURL(join(dir, 'plugin.js')).href) as { seen: unknown[] }
     // The entry, not the body, is what applies the schema defaults.
-    assert.deepEqual(body.seen, [{ catalogBase: DEFAULT_CATALOG_BASE, marketSize: 200, profile: 'web' }])
+    assert.deepEqual(body.seen, [{ catalogBase: DEFAULT_CATALOG_BASE, marketSize: 1000, profile: 'web' }])
     disposer()
     assert.equal(body.seen[1], 'disposed', 'the body owns teardown; the entry only passes it through')
   } finally {

@@ -79,7 +79,7 @@ export interface Config {
  */
 export const Config = z.object({
   catalogBase: z.string().default(DEFAULT_CATALOG_BASE),
-  marketSize: z.natural().min(1).default(200),
+  marketSize: z.natural().min(1).default(1000),
   profile: z.string().default('web'),
 })
 

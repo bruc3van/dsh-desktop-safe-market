@@ -74,13 +74,16 @@ export function SkillsView({ t, listSkills }: {
         </div>
       )}
 
-      <p className="dsh_market_status" data-error={state.status === 'error' ? 'true' : 'false'}>
-        {state.status === 'loading'
-          ? t('skills.loading')
-          : state.status === 'error'
-            ? t('skills.failed', { reason: state.message })
-            : result !== null && result.error === SESSIONS_PENDING
-              ? t('skills.loading')
+      {state.status === 'loading' || (result !== null && result.error === SESSIONS_PENDING)
+        ? (
+          <div className="dsh_market_notice" aria-busy="true" aria-live="polite">
+            <p className="dsh_market_noticeBody">{t('skills.loading')}</p>
+          </div>
+          )
+        : (
+          <p className="dsh_market_status" data-error={state.status === 'error' || (result !== null && result.error !== '' && result.error !== NO_SESSION) ? 'true' : undefined}>
+            {state.status === 'error'
+              ? t('skills.failed', { reason: state.message })
               : result !== null && result.error === NO_SESSION
                 ? t('skills.noSession')
                 : result !== null && result.error !== ''
@@ -88,7 +91,8 @@ export function SkillsView({ t, listSkills }: {
                   : shown.length === 0
                     ? t('skills.empty')
                     : t('skills.count', { count: String(shown.length) })}
-      </p>
+          </p>
+          )}
 
       {result !== null && !result.complete && result.error === '' && (
         <p className="dsh_market_status" data-error="true">{t('skills.incomplete')}</p>

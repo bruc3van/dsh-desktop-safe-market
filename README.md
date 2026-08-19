@@ -105,7 +105,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 
 - 上游对带 `dsh-plugin` 标签的爬取（`repositories.json`）做过滤：要求有简介、剔除归档/停用仓库、应用 `curated.json` 人工排除名单；
 - 分类与**均衡发牌**也在上游——不是纯按 star 排序（那样两三个分类就会吃掉几乎所有席位），而是每类先出最强、再出次强，至多 300 席；
-- 本插件按该顺序截断到 `marketSize`（默认 200），并在 Host 侧重校验每一行后才发给浏览器；
+- 本插件按该顺序截断到 `marketSize`（默认 1000），并在 Host 侧重校验每一行后才发给浏览器；
 - **网络韧性（自动切换）**：默认从 GitHub raw 读取。当默认地址不可达或请求出错（超时、DNS/连接失败、HTTP 错误）时，自动改用同一文件在 Gitee 的镜像（[bruc3van/awesome-dsh-plugin](https://gitee.com/bruc3van/awesome-dsh-plugin) 的 `raw/main/data/market.json`）；回答过的那一侧会被记住（粘性），下次读取直接走它，镜像失败再回到 GitHub，无需任何配置。自己配置过 `catalogBase` 的部署不受影响——只读它指定的那一个来源。
 
 接口协议——字段形状、截断上限、分支名白名单、顺序不变量与版本规则——见 [docs/market-json-spec.md](docs/market-json-spec.md)。
@@ -117,7 +117,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `catalogBase` | awesome-dsh-plugin 的 `data/` 目录 | 指向该文件的镜像 |
-| `marketSize` | `200` | 市场展示多少个插件 |
+| `marketSize` | `1000` | 市场展示多少个插件 |
 
 ## 安全边界
 

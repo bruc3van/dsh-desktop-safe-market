@@ -179,21 +179,27 @@ export function apply(ctx: ClientContext): void {
   const setEnabled = async (enabled: boolean): Promise<void> => {
     const remote = market
     if (remote === undefined) {
-      reportError('settings update', new Error('the safeMarket Remote is not mounted'))
-      return
+      const error = new Error('the safeMarket Remote is not mounted')
+      reportError('settings update', error)
+      throw error
     }
     const generation = ++settingsGeneration
+    let result: { ok: true; value: SafeMarketSettings } | { ok: false; error: { code: string; message: string } }
     try {
-      const result = await remote.updateSettings({ field: 'enabled', value: enabled })
-      if (market !== remote || generation !== settingsGeneration) return
-      if (!result.ok) {
-        reportError('settings update', result.error)
-        return
-      }
-      scope.set({ ...scope.getSnapshot(), value: result.value })
+      result = await remote.updateSettings({ field: 'enabled', value: enabled })
     } catch (error) {
-      if (market === remote && generation === settingsGeneration) reportError('settings update', error)
+      if (market === remote && generation === settingsGeneration) {
+        reportError('settings update', error)
+        throw error
+      }
+      return
     }
+    if (market !== remote || generation !== settingsGeneration) return
+    if (!result.ok) {
+      reportError('settings update', result.error)
+      throw new Error(result.error.message)
+    }
+    scope.set({ ...scope.getSnapshot(), value: result.value })
   }
 
   /**

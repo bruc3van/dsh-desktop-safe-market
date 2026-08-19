@@ -251,6 +251,9 @@ export const cssText = `
 .dsh_market_status[data-error="true"] {
   color: var(--dsw-alias-state-error-primary);
 }
+.dsh_market_status[aria-busy="true"] {
+  color: var(--dsw-alias-label-secondary);
+}
 
 .dsh_market_cards {
   display: grid;

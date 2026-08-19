@@ -244,11 +244,18 @@ export interface MarketInstalledResult {
   readonly profile: string
   readonly error: string
   /**
-   * An outcome line the verb wants the panel to show instead of the default
-   * success copy, e.g. an uninstall whose in-session stop failed and will
-   * only finish at the next boot. Absent (or empty) means the default copy.
+   * Fault details a verb wants the panel to wrap in localized copy. Absent
+   * (or empty) means the default success line. The wrapping sentence is
+   * chosen by {@link MarketInstalledResult.noticeKind}.
    */
   readonly notice?: string
+  /**
+   * How the panel should phrase a non-empty {@link MarketInstalledResult.notice}.
+   * `may-run` means the package is off the profile but may keep running until
+   * the next restart; `faults` means it is off the profile and the details
+   * are the leftover work that did not finish.
+   */
+  readonly noticeKind?: 'faults' | 'may-run'
 }
 
 /** One enable/disable request for an installed package. */
@@ -377,6 +384,7 @@ export const marketInstalledResultSchema = z.object({
   profile: z.string(),
   error: z.string(),
   notice: z.string().optional(),
+  noticeKind: z.enum(['faults', 'may-run']).optional(),
 }).readonly()
 
 /** Strict wire codec for one enable/disable request. */

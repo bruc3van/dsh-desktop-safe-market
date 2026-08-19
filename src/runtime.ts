@@ -5,7 +5,7 @@
  * `/api/safeMarket/<method>`.
  *
  * The catalog read lives here rather than in the browser for two reasons:
- * the crawl is 2.4 MB and the browser needs 200 rows of it, and the rows
+ * the crawl is 2.4 MB and the browser needs 1000 rows of it, and the rows
  * carry remote text whose sanitizing belongs on one side of the wire, not in
  * every renderer that touches them.
  */
@@ -97,7 +97,7 @@ export class SafeMarketRuntime extends TypertRemoteService {
   @Remote
   async getCatalog(force: boolean, signal: AbortSignal): Promise<MarketCatalogResult> {
     if (!this.readSettings().enabled) {
-      throw new Error('the plugin market is disabled in Settings')
+      throw new Error('Safe Market is disabled in Settings')
     }
     return await this.catalog.read(force, signal)
   }

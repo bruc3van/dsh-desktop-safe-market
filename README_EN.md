@@ -105,7 +105,7 @@ The market reads a single published file, [`market.json`](https://github.com/bru
 
 - the crawl of repositories tagged `dsh-plugin` (`repositories.json`) is filtered there — a description is required, archived/disabled repositories are dropped, and the exclusions in `curated.json` are applied;
 - rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every slot to two or three categories), but entries dealt round by round so every category places its best entry before any places its second, up to 300;
-- this plugin truncates that order to `marketSize` (default 200) and re-validates every row on the Host before the browser sees it;
+- this plugin truncates that order to `marketSize` (default 1000) and re-validates every row on the Host before the browser sees it;
 - **network resilience (automatic failover)**: the default read comes from GitHub raw. When the default address cannot answer (timeout, DNS/connection failure, or an HTTP error), the read automatically falls over to the Gitee mirror of the same published file ([bruc3van/awesome-dsh-plugin](https://gitee.com/bruc3van/awesome-dsh-plugin)'s `raw/main/data/market.json`). The side that answered is remembered (sticky) and tried first next time, falling back the other way if it later fails — no configuration needed. A deployment with its own `catalogBase` keeps exactly that one source.
 
 The wire protocol — field shapes, truncation limits, the branch-name whitelist, the ordering invariant, and the versioning rules — is documented in [docs/market-json-spec.md](docs/market-json-spec.md).
@@ -117,7 +117,7 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `catalogBase` | awesome-dsh-plugin's `data/` directory | Point the market at a mirror of the same file |
-| `marketSize` | `200` | How many plugins the market shows |
+| `marketSize` | `1000` | How many plugins the market shows |
 
 ## Security boundary
 

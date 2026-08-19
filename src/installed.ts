@@ -28,7 +28,8 @@
  *   — so the lockfile and `node_modules` go with the manifest edit; an
  *   in-box seat has no pnpm tree and is removed by deleting its copy. A
  *   failed pnpm run still drops the name from the manifest (next boot will
- *   not compose it) and the result notice names the prune fault.
+ *   not compose it) and the result `notice` carries the leftover fault
+ *   details so the panel can wrap them in localized copy.
  *
  * Listing, enable, disable, and in-box uninstall stay local file edits plus
  * an in-process Loader call. User-plugin uninstall is the one verb that
@@ -502,9 +503,8 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
       fault.startsWith('stop rows:') || fault.startsWith('live stop:') || fault.startsWith('sweep record:'))
     return {
       ...result,
-      notice: mayRun
-        ? packageName + ' is removed from the profile but may keep running until the next restart (' + faults.join('; ') + ')'
-        : packageName + ' is removed from the profile (' + faults.join('; ') + ')',
+      notice: faults.join('; '),
+      noticeKind: mayRun ? 'may-run' : 'faults',
     }
   }
 

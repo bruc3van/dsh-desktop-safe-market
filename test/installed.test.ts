@@ -607,6 +607,7 @@ test('pnpm failure still drops the bundle and names the prune', async () => {
     })
     const result = await built.uninstall('demo-plugin')
     assert.match(result.notice ?? '', /pnpm remove: pnpm not found on PATH/)
+    assert.equal(result.noticeKind, 'faults')
     const manifest = await readManifest(profileDir)
     assert.equal('demo-plugin' in (manifest.dependencies ?? {}), false)
     assert.equal(manifest.dsh?.profile?.bundles?.includes('demo-plugin'), false)
@@ -672,6 +673,7 @@ test('uninstall survives a broken patch layer: manifest edited, no record, live 
     const result = await built.uninstall('demo-plugin')
     assert.equal(result.packages.length, 0)
     assert.match(result.notice ?? '', /stop rows/, 'the notice names the failed stop so the panel can show it')
+    assert.equal(result.noticeKind, 'may-run')
     const manifest = await readManifest(profileDir)
     assert.equal('demo-plugin' in (manifest.dependencies ?? {}), false)
     assert.deepEqual(manifest.dsh!.profile!.bundles, ['@deepseek-ai/dsh-base', '@deepseek-ai/dsh-web-app'])
@@ -802,6 +804,11 @@ test('the installed wire codecs accept the real shapes and reject hostile ones',
   assert.equal(result.packages[0]!.entries[0]!.phase, 'active')
   assert.equal(result.notice, undefined, 'the outcome notice is optional on the wire')
   assert.equal(marketInstalledResultSchema.parse({ ...result, notice: 'keeps running' }).notice, 'keeps running')
+  assert.equal(
+    marketInstalledResultSchema.parse({ ...result, notice: 'pnpm remove: x', noticeKind: 'may-run' }).noticeKind,
+    'may-run',
+  )
+  assert.throws(() => marketInstalledResultSchema.parse({ ...result, noticeKind: 'nope' }))
   assert.throws(() => packageNameSchema.parse('../evil'))
   assert.throws(() => packageNameSchema.parse('a b'))
   assert.throws(() => setInstalledEnabledUpdateSchema.parse({ packageName: 'demo-plugin', enabled: 'yes' }))
