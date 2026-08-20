@@ -57,6 +57,7 @@ export declare const zh: {
     readonly stars: "star";
     readonly install: "安全安装";
     readonly upgrade: "安全升级";
+    readonly 'self.upgrade': "安全升级市场";
     readonly installedHere: "已安装 v{version}";
     readonly installedHereUnknown: "已安装";
     readonly installing: "正在打开会话…";

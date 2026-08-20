@@ -19,6 +19,40 @@ export const cssText = `
   max-width: 760px;
   color: var(--dsw-alias-label-primary);
 }
+.dsh_market_headingRow {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  min-width: 0;
+}
+.dsh_market_headerAction {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  padding: 2px 4px;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  color: var(--dsw-alias-label-tertiary);
+  font: inherit;
+  font-size: 12px;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+.dsh_market_headerAction:hover:not(:disabled) {
+  background: var(--dsw-alias-interactive-bg-hover);
+  color: var(--dsw-alias-label-primary);
+}
+.dsh_market_headerAction:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+.dsh_market_headerAction:disabled {
+  cursor: default;
+  opacity: .55;
+}
 .dsh_market_heading {
   display: flex;
   align-items: baseline;

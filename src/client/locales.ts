@@ -106,6 +106,7 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
 
   'install': '安全安装',
   'upgrade': '安全升级',
+  'self.upgrade': '安全升级市场',
   'installedHere': '已安装 v{version}',
   'installedHereUnknown': '已安装',
   'installing': '正在打开会话…',
@@ -261,6 +262,7 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
 
   'install': 'Review and install',
   'upgrade': 'Review and upgrade',
+  'self.upgrade': 'Review and upgrade market',
   'installedHere': 'Installed v{version}',
   'installedHereUnknown': 'Installed',
   'installing': 'Opening a session…',

@@ -27,7 +27,7 @@ import type {
   MarketSkillsResult,
   SafeMarketSettings,
 } from '../contract.ts'
-import { isSafeVersion } from '../contract.ts'
+import { isSafeVersion, PACKAGE_NAME } from '../contract.ts'
 import type { MarketLocale } from './copy.ts'
 import { describeInstalled, ownedBy, ownedIndexOf, shortName } from './owned.ts'
 import { SkillsView } from './SkillsView.tsx'
@@ -123,6 +123,27 @@ type CardState =
   | { readonly status: 'error'; readonly message: string }
 
 type Page = 'plugins' | 'skills'
+
+/**
+ * The market's own fixed repository identity. Unlike catalog rows this is
+ * package-owned source, not remote snapshot text; keeping the complete
+ * MarketPlugin shape lets the header use the exact same hand-off as a card.
+ */
+const SELF_MARKET_PLUGIN: MarketPlugin = {
+  fullName: 'bruc3van/dsh-desktop-safe-market',
+  owner: 'bruc3van',
+  name: PACKAGE_NAME,
+  url: 'https://github.com/bruc3van/dsh-desktop-safe-market',
+  description: '',
+  stars: 0,
+  language: 'TypeScript',
+  license: 'MIT',
+  pushedAt: '',
+  defaultBranch: 'master',
+  category: 'market',
+  categoryZh: '市场',
+  categoryEn: 'Marketplace',
+}
 
 /** `1998` → `2.0k`: a card has room for the magnitude, not the digits. */
 function starCount(stars: number): string {
@@ -380,6 +401,19 @@ function InstalledCard({ t, item, installed }: {
             )
           : (
             <>
+              {/* The Host reduces a manifest's repository field to a checked
+                  owner/name slug. Packages without one get no link rather
+                  than a guess based on their package name. */}
+              {item.repository !== '' && (
+                <a
+                  className="dsh_market_link"
+                  href={`https://github.com/${item.repository}`}
+                  target="_blank"
+                  rel="noreferrer"
+                >
+                  {t('repo')}
+                </a>
+              )}
               {!item.self && !item.unregistered && (
                 <button
                   type="button"
@@ -896,6 +930,18 @@ export function MarketSection({
     { id: 'plugins', label: t('tab.plugins') },
     { id: 'skills', label: t('tab.skills') },
   ]
+  const selfUpgrade = cards[SELF_MARKET_PLUGIN.fullName]
+
+  const runSelfUpgrade = (): void => {
+    const profile = snapshot.profile
+    if (profile === null) return
+    runInstall(SELF_MARKET_PLUGIN, t('prompt.upgrade', {
+      url: SELF_MARKET_PLUGIN.url,
+      profile,
+      branch: SELF_MARKET_PLUGIN.defaultBranch,
+      installed: isSafeVersion(snapshot.version) ? `${PACKAGE_NAME} ${snapshot.version}` : PACKAGE_NAME,
+    }), workspaceReadiness.getSnapshot() === 'none')
+  }
 
   return (
     <div className="dsh_market_section">
@@ -903,10 +949,30 @@ export function MarketSection({
           installed panel does carry a row for the in-box seat now, but that
           row is one card among many and only exists while the seat is listed
           — the header states which market this is, always. */}
-      <h2 className="dsh_market_heading">
-        {t('nav')}
-        {isSafeVersion(snapshot.version) && <span className="dsh_market_selfVersion">{`v${snapshot.version}`}</span>}
-      </h2>
+      <div className="dsh_market_headingRow">
+        <h2 className="dsh_market_heading">
+          {t('nav')}
+          {isSafeVersion(snapshot.version) && <span className="dsh_market_selfVersion">{`v${snapshot.version}`}</span>}
+        </h2>
+        <button
+          type="button"
+          className="dsh_market_headerAction"
+          disabled={snapshot.profile === null || installBusy}
+          onClick={runSelfUpgrade}
+        >
+          <span aria-hidden="true">↻</span>
+          {selfUpgrade?.status === 'picking'
+            ? t('install.picking')
+            : selfUpgrade?.status === 'busy'
+              ? t('installing')
+              : t('self.upgrade')}
+        </button>
+      </div>
+      {(selfUpgrade?.status === 'error' || selfUpgrade?.status === 'needs-workspace') && (
+        <p className="dsh_market_status" data-error={selfUpgrade.status === 'error' ? 'true' : undefined}>
+          {selfUpgrade.message}
+        </p>
+      )}
       <div className="dsh_market_tabs" role="tablist" aria-label={t('tabs.aria')}>
         {pages.map(entry => (
           <button
