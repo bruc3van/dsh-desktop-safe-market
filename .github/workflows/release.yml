@@ -1,10 +1,15 @@
 name: Release
 
 # Tags are the release trigger: `git push origin vX.Y.Z` reruns the full
-# check gate, then cuts the GitHub Release for that tag. The install tarball
-# the READMEs pin (archive/refs/tags/vX.Y.Z.tar.gz) is served by GitHub for
-# any tag on its own, so this workflow exists for the changelog, not to
-# upload artifacts.
+# check gate, then cuts the GitHub Release and publishes the same version
+# to npm. The READMEs still pin a GitHub tarball (archive/refs/tags/vX.Y.Z.tar.gz)
+# as the version-locked install; npm is the default install and is published
+# here so a tag cannot ship GitHub-only.
+#
+# npm uses Trusted Publishing (OIDC), not a stored token. One-time setup:
+# on https://www.npmjs.com/package/dsh-desktop-safe-market → Settings →
+# Trusted Publisher → GitHub Actions, with workflow filename `release.yml`
+# (this file) and allowed action `npm publish`.
 
 on:
   push:
@@ -65,3 +70,26 @@ jobs:
           } > notes.md
 
           gh release create "$TAG" --verify-tag --title "$TAG" --notes-file notes.md
+
+  npm:
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # OIDC for npm Trusted Publishing. The token is minted for this job
+      # and exchanged at publish time; nothing long-lived is stored.
+      id-token: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+      - name: Install dependencies
+        run: pnpm install
+      - name: Publish to npm
+        # prepublishOnly rebuilds lib/; provenance is automatic under OIDC.
+        run: npm publish --access public

@@ -24,14 +24,22 @@ This plugin joins the two halves: a community shortlist that has **already had t
 
 ## Install
 
+Prefer the [npm](https://www.npmjs.com/package/dsh-desktop-safe-market) package:
+
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.13.tar.gz
+dsh plugin --profile web add dsh-desktop-safe-market
 ```
 
 Or hand the install to your agent — copy this one-line prompt:
 
 ```text
-Install DSH Safe Market for me: run the official command `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.13.tar.gz` into the web profile, then remind me to restart dsh web for it to load.
+Install DSH Safe Market for me: run the official command `dsh plugin --profile web add dsh-desktop-safe-market` into the web profile, then remind me to restart dsh web for it to load.
+```
+
+To pin the version this document names, use the GitHub release tarball:
+
+```sh
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.13.tar.gz
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -148,7 +156,9 @@ pnpm test          # node --test, the catalog reduction and reader regressions
 pnpm run build     # lib/index.js (Host ESM), lib/client.js (browser, ModuleLoader-wrapped), lib/types
 ```
 
-A version bump has places that must move together: `package.json`, `dsh.plugin.json`, and the tarball URLs in both READMEs (the install command and the agent prompt each carry one). The version gate in `pnpm test` (`test/version.test.ts`) checks each one, and CI (`.github/workflows/check.yml`) runs the same check on every push and PR.
+A version bump has places that must move together: `package.json`, `dsh.plugin.json`, and the tarball URLs in both READMEs. The version gate in `pnpm test` (`test/version.test.ts`) checks those, and that each README still offers the npm package-name install; CI (`.github/workflows/check.yml`) runs the same check on every push and PR.
+
+Pushing a `vX.Y.Z` tag is what publishes: CI (`.github/workflows/release.yml`) cuts the GitHub Release and Trusted-Publishes the same version to [npm](https://www.npmjs.com/package/dsh-desktop-safe-market) — there is no separate `npm publish` to remember. The first time, the npm package settings need this repository's `release.yml` registered as a Trusted Publisher (user `bruc3van`, repo `dsh-desktop-safe-market`, workflow filename `release.yml`, allow `npm publish`).
 
 `devDependencies` are pinned to the published `@deepseek-ai/*` versions the runtime actually loads; every `peerDependency` is optional and supplied by the profile's node_modules.
 

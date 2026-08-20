@@ -1,10 +1,10 @@
 name: Check
 
-# The version gate lives in test/version.test.ts: the READMEs hardcode the
-# release tarball URL (the install command plus the copyable agent prompt),
-# so a version bump must move package.json, dsh.plugin.json, and both READMEs
-# together — pnpm test fails on any drift. This workflow is the CI seat for
-# the whole `check` script (typecheck, tests, build).
+# The version gate lives in test/version.test.ts: a bump must move
+# package.json, dsh.plugin.json, and both READMEs (npm install command plus
+# the pinned tarball) together, and the release workflow must keep its npm
+# publish job — pnpm test fails on any drift. This workflow is the CI seat
+# for the whole `check` script (typecheck, tests, build).
 
 on:
   push:

@@ -5,9 +5,23 @@
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
+  "homepage": "https://github.com/bruc3van/dsh-desktop-safe-market#readme",
+  "bugs": {
+    "url": "https://github.com/bruc3van/dsh-desktop-safe-market/issues"
+  },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/bruc3van/dsh-desktop-safe-market.git"
+  },
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "deepseek-harness",
+    "plugin",
+    "marketplace"
+  ],
+  "publishConfig": {
+    "access": "public"
   },
   "exports": {
     ".": {
@@ -50,6 +64,7 @@
   ],
   "scripts": {
     "build": "node build.mjs",
+    "prepublishOnly": "node build.mjs",
     "typecheck": "tsc --noEmit",
     "test": "node --test \"test/**/*.test.ts\"",
     "check": "pnpm run typecheck && pnpm run build && pnpm test"

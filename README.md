@@ -24,14 +24,22 @@
 
 ## 安装
 
+优先从 [npm](https://www.npmjs.com/package/dsh-desktop-safe-market) 装：
+
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.13.tar.gz
+dsh plugin --profile web add dsh-desktop-safe-market
 ```
 
 也可以把安装这件事直接交给你的 Agent——复制这句提示词发过去即可：
 
 ```text
-帮我安装 DSH 安全市场：用官方命令 `dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.13.tar.gz` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
+帮我安装 DSH 安全市场：用官方命令 `dsh plugin --profile web add dsh-desktop-safe-market` 装进 web profile，完成后提醒我重启 dsh web 才会生效。
+```
+
+要锁到当前文档对应的那一版，用 GitHub release tarball：
+
+```sh
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.2.13.tar.gz
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -148,7 +156,9 @@ pnpm test          # node --test，目录归约与读取器的回归测试
 pnpm run build     # lib/index.js（Host，ESM）、lib/client.js（浏览器，ModuleLoader 包裹）、lib/types
 ```
 
-发版时版本号有几处要一起动：`package.json`、`dsh.plugin.json`，以及两份 README 里的 tarball 地址（安装命令与 Agent 提示词各一处）。`pnpm test` 里的版本门禁（`test/version.test.ts`）会逐一核对，CI（`.github/workflows/check.yml`）在每次推送与 PR 上跑同一套检查。
+发版时版本号有几处要一起动：`package.json`、`dsh.plugin.json`，以及两份 README 里的 tarball 地址。`pnpm test` 里的版本门禁（`test/version.test.ts`）会核对这几处，以及 README 是否仍给出 npm 包名安装命令；CI（`.github/workflows/check.yml`）在每次推送与 PR 上跑同一套检查。
+
+推送 `vX.Y.Z` 标签后，CI（`.github/workflows/release.yml`）会切 GitHub Release，并用 Trusted Publishing 把同一版本发到 [npm](https://www.npmjs.com/package/dsh-desktop-safe-market)——不必再手工 `npm publish`。第一次需要在 npm 包设置里把本仓库的 `release.yml` 配成 Trusted Publisher（user `bruc3van`，repo `dsh-desktop-safe-market`，workflow filename `release.yml`，允许 `npm publish`）。
 
 `devDependencies` 固定在与运行时一致的 `@deepseek-ai/*` 已发布版本上；`peerDependencies` 全部可选，实际由 profile 的 node_modules 提供。
 
