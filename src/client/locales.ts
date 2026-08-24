@@ -128,9 +128,7 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
 
   'installed.chip': '已安装',
   'installed.count': '共 {count} 个',
-  'installed.body': '这里列出当前 profile 通过包安装的插件。停用会写入本 profile 的补丁层并立即生效；'
-    + '卸载用户插件会先停用，再在本 profile 里执行 pnpm remove（与官方 dsh plugin remove 相同），锁文件和 node_modules 一并清掉。'
-    + 'DSH 自带的插件不在此列。',
+  'installed.body': '当前 profile 用包装上的插件。停用立即生效；卸载会先停用，再删掉包和它的依赖。DSH 自带的插件不在此列。',
   'installed.loading': '正在读取已安装插件，请稍候…',
   'installed.failed': '读取已安装插件失败：{reason}',
   'installed.empty': '还没有通过包安装的插件——从下面的市场挑一个，或运行 dsh plugin add。',
@@ -284,9 +282,8 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
 
   'installed.chip': 'Installed',
   'installed.count': '{count} total',
-  'installed.body': 'Plugins installed into this profile as packages. Disabling writes a row into the profile’s own'
-    + ' patch layer and takes effect immediately; uninstalling a user plugin stops it, then runs pnpm remove in this'
-    + ' profile (the same primitive as dsh plugin remove) so the lockfile and node_modules go with it.'
+  'installed.body': 'Plugins installed into this profile as packages. Disabling takes effect right away;'
+    + ' uninstalling stops the plugin, then removes the package and its dependencies.'
     + ' Plugins shipped with DSH are not listed.',
   'installed.loading': 'Loading installed plugins — this can take a moment…',
   'installed.failed': 'Could not read installed plugins: {reason}',
