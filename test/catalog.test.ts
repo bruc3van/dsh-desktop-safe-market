@@ -13,7 +13,8 @@ import {
   MIRROR_CATALOG_BASE,
 } from '../src/catalog.ts'
 import type { MarketCatalog, MarketPlugin } from '../src/contract.ts'
-import { isSafeBranchName, marketPluginSchema } from '../src/contract.ts'
+import { marketPluginSchema } from '../src/contract.ts'
+import { isSafeBranchName } from '../src/shapes.ts'
 
 /** One valid market row, already in wire shape. */
 function plugin(overrides: Partial<MarketPlugin> = {}): MarketPlugin {

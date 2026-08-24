@@ -8,7 +8,7 @@
  * the rules that decide whether a card says "install" or "upgrade" can be
  * tested directly rather than through a React tree.
  */
-import { isSafeVersion } from '../contract.ts'
+import { isSafeVersion } from '../shapes.ts'
 import type { MarketInstalledPackage, MarketPlugin } from '../contract.ts'
 
 /** `@scope/name` → `name`; a bare name stays itself. */

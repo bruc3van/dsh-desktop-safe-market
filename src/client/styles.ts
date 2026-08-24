@@ -1,10 +1,12 @@
 /**
  * The market tab's stylesheet, hand-written as a template string and injected
  * once by the plugin body: the web server serves exactly one file per client
- * plugin, so no separate CSS artifact may exist. Colors come only from the
- * shared `--dsw-alias-*` design platform (no literal values), so the tab
- * follows the appearance setting with the rest of Settings; class names carry
- * the `dsh_market` prefix to stay unique in the assembled shell.
+ * plugin, so no separate CSS artifact may exist. Every hue comes from the
+ * shared `--dsw-alias-*` design platform, so the tab follows the appearance
+ * setting with the rest of Settings; the single literal is a neutral
+ * alpha-black drop shadow, which reads the same under either appearance.
+ * Class names carry the `dsh_market` prefix to stay unique in the assembled
+ * shell. Both rules are enforced by test/client.test.ts.
  */
 
 /** Stable `<style>` element id (idempotent injection across HMR re-runs). */
@@ -561,14 +563,39 @@ export const cssText = `
 `
 
 /**
- * Inject the stylesheet once. Idempotent: a second call (HMR, a re-applied
- * plugin) finds its own tag and leaves it alone.
+ * Ownership lives on the shared DOM node, not in module state. HMR can overlap
+ * two separately evaluated copies of this module; a module-local counter would
+ * give each copy its own `1`, letting the old copy remove the new one's sheet.
  */
-export function adoptStyles(): void {
-  if (typeof document === 'undefined') return
-  if (document.getElementById(STYLE_ID) !== null) return
-  const tag = document.createElement('style')
-  tag.id = STYLE_ID
-  tag.textContent = cssText
-  document.head.appendChild(tag)
+const STYLE_OWNERS = '__dshSafeMarketStyleOwners'
+type OwnedStyleElement = HTMLStyleElement & { [STYLE_OWNERS]?: number }
+
+/**
+ * Inject the stylesheet, and hand back a disposer that removes it only once
+ * the last adopter is gone. Idempotent across HMR re-runs and multiple
+ * instances: the node is created once and reference-counted, so a re-applied
+ * plugin reuses the existing tag rather than stacking a second one.
+ */
+export function adoptStyles(): () => void {
+  if (typeof document === 'undefined') return () => {}
+  let tag = document.getElementById(STYLE_ID) as OwnedStyleElement | null
+  if (tag === null) {
+    tag = document.createElement('style') as OwnedStyleElement
+    tag.id = STYLE_ID
+    tag.textContent = cssText
+    document.head.appendChild(tag)
+  }
+  tag[STYLE_OWNERS] = (tag[STYLE_OWNERS] ?? 0) + 1
+  // Guard against a disposer that fires twice: it must not double-decrement
+  // and strand the count above zero (the sheet would then never come off).
+  let disposed = false
+  return () => {
+    if (disposed) return
+    disposed = true
+    const owners = Math.max(0, (tag[STYLE_OWNERS] ?? 1) - 1)
+    tag[STYLE_OWNERS] = owners
+    // A later module may have replaced the node under this id. An old
+    // disposer must never remove that replacement.
+    if (owners === 0 && document.getElementById(STYLE_ID) === tag) tag.remove()
+  }
 }

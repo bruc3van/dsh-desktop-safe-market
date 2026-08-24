@@ -88,7 +88,14 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
   'intro.disable': '停用安全市场',
   'intro.disabling': '正在停用…',
   'intro.disableFailed': '停用失败：{reason}',
-  'intro.disclaimer': '收录不代表安全背书。安装前请用「安全审查」让 Agent 读一遍代码，并自己看过结论再决定。',
+  // Describes the actual flow, not an idealized one. The agent is authorized
+  // to finish the install on its own verdict — the human checkpoint is the
+  // Enter key before the review, plus every stop the prompt makes it take.
+  // Copy that implied a second, post-conclusion decision was describing a
+  // product this is not.
+  'intro.disclaimer': '收录不代表安全背书。点「安全安装」只把审查提示词填进新会话——发不发送由你按回车决定。'
+    + '发送后由 Agent 读代码：发现可疑会停下来说明并问你，判定干净则直接装完再回来报告。'
+    + '这是一次有依据的辅助判断，不是安全结论。',
 
   'search': '搜索插件名称、简介或分类',
   'all': '全部',
@@ -241,8 +248,10 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
   'intro.disable': 'Disable Safe Market',
   'intro.disabling': 'Disabling…',
   'intro.disableFailed': 'Could not disable: {reason}',
-  'intro.disclaimer': 'Being listed is not a safety endorsement. Use Review and install to have the agent read the'
-    + ' code first, and read its conclusion yourself before deciding.',
+  'intro.disclaimer': 'Being listed is not a safety endorsement. Review and install only writes the review prompt'
+    + ' into a new session — sending it is your Enter key. Once sent, the agent reads the code: it stops and asks'
+    + ' you if anything looks suspicious, and if it judges the code clean it installs and reports back.'
+    + ' That is an informed second opinion, not a verdict.',
 
   'search': 'Search plugins by name, description, or category',
   'all': 'All',

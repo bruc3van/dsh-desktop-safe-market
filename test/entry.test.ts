@@ -162,3 +162,27 @@ test('a body that loads and starts hands its own disposer back', async () => {
     await rm(dir, { recursive: true, force: true })
   }
 })
+
+/**
+ * The entry's weight, which is the other half of the same property.
+ *
+ * `src/contract.ts` builds every wire codec at module scope, so importing a
+ * single constant from it evaluates the whole of zod — and the entry needs
+ * exactly one constant (the package name) plus two patterns. Reaching them
+ * through the contract cost the entry ~550 KB of eagerly evaluated schema
+ * code, in the one file whose entire job is to be the smallest thing a
+ * foreign runtime can import. `src/shapes.ts` exists to keep them apart; this
+ * test is what stops an innocent-looking import from quietly undoing it.
+ */
+test('the entry stays light: no wire codecs are pulled into it', async () => {
+  const entry = await readFile(entryFile, 'utf8')
+  for (const marker of ['ZodString', 'ZodObject', '$ZodType']) {
+    assert.ok(
+      !entry.includes(marker),
+      `lib/index.js carries ${marker}: something it imports reaches src/contract.ts, which evaluates `
+      + 'every zod codec at module scope. Take the value from src/shapes.ts instead.',
+    )
+  }
+  const kb = Buffer.byteLength(entry) / 1024
+  assert.ok(kb < 100, `lib/index.js is ${kb.toFixed(0)} KB; the entry is meant to stay under 100 KB`)
+})

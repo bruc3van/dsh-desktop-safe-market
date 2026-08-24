@@ -28,7 +28,7 @@
  * default GitHub base only.
  */
 import type { MarketCatalog, MarketCategory, MarketPlugin } from './contract.ts'
-import { isSafeBranchName, REPOSITORY_SLUG_PATTERN } from './contract.ts'
+import { isSafeBranchName, REPOSITORY_SLUG_PATTERN } from './shapes.ts'
 
 /**
  * The published community catalog this market reads by default: the

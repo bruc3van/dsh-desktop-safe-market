@@ -32,8 +32,8 @@ import {
 import { createInstalledManager, type PendingUninstall, type RemoveDependencyResult } from '../src/installed.ts'
 import { adoptDomainState, initialDomainState, safeMarketDomainState, type SafeMarketDomainState } from '../src/store.ts'
 import { describeInstalled, ownedBy, ownedIndexOf } from '../src/client/owned.ts'
+import { isSafeVersion } from '../src/shapes.ts'
 import {
-  isSafeVersion,
   marketInstalledResultSchema,
   type MarketInstalledPackage,
   type MarketPlugin,
@@ -1138,6 +1138,36 @@ test('uninstalling the market itself removes its own copy, not just the entry', 
     assert.equal(existsSync(seatDir), false, 'the copy is the install')
     assert.deepEqual(updates, [], 'but the running market is not stopped from inside itself')
     assert.equal(result.notice, undefined, 'and nothing is reported as a fault')
+  } finally {
+    await rm(home, { recursive: true, force: true })
+  }
+})
+
+test('a failing live nudge still takes the sweep record with the disable rows', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n    - id: demo-plugin\n      name: demo-plugin\n')
+    // The mid-session reinstall shape: a record from this session's uninstall
+    // is still out, and the user is now disabling the package deliberately.
+    await writePending(home, [{ packageName: 'demo-plugin', entryIds: ['demo-plugin'], at: '2026-01-01T00:00:00Z' }])
+    const entry = {
+      id: 'include:demo-plugin',
+      disabled: false,
+      fiber: { state: 2 },
+      update: () => Promise.reject(new Error('loader refused')),
+    }
+    const loader = { entries: () => [entry][Symbol.iterator]() } as unknown as Loader
+    const built = makeManager(home, loader)
+
+    // The live half fails, so the verb fails — the panel must hear about it.
+    await assert.rejects(() => built.setEnabled('demo-plugin', false), /loader refused/)
+    // The durable half landed anyway...
+    assert.match(await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8'), /- id: demo-plugin\n  disabled: true/)
+    // ...and so did the record drop, which is the point: a record surviving
+    // here would let the next boot's sweep undo the disable the user asked for.
+    assert.deepEqual(await readPending(home), [])
+    await built.sweep()
+    assert.match(await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8'), /- id: demo-plugin\n  disabled: true/)
   } finally {
     await rm(home, { recursive: true, force: true })
   }

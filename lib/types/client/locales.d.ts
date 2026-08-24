@@ -41,7 +41,7 @@ export declare const zh: {
     readonly 'intro.disable': "停用安全市场";
     readonly 'intro.disabling': "正在停用…";
     readonly 'intro.disableFailed': "停用失败：{reason}";
-    readonly 'intro.disclaimer': "收录不代表安全背书。安装前请用「安全审查」让 Agent 读一遍代码，并自己看过结论再决定。";
+    readonly 'intro.disclaimer': string;
     readonly search: "搜索插件名称、简介或分类";
     readonly all: "全部";
     readonly refresh: "刷新";

@@ -19,11 +19,11 @@
  */
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
-import { readFile, rename, writeFile } from 'node:fs/promises'
+import { readFile, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { isMap, isScalar, isSeq, parse, parseDocument, type ScalarTag } from 'yaml'
-import { REPOSITORY_SLUG_PATTERN } from './contract.ts'
+import { REPOSITORY_SLUG_PATTERN } from './shapes.ts'
 
 /** Environment variable overriding the default harness home. */
 export const DSH_HOME_ENV = 'DSH_HOME'
@@ -132,10 +132,29 @@ export type ProfileManifest = Record<string, unknown> & {
   }
 }
 
-/** Write a file atomically (tmp + rename), the include's own discipline. */
+/** Serial number distinguishing two in-flight writes from the same process. */
+let atomicWriteSeq = 0
+
+/**
+ * Write a file atomically (tmp + rename), the include's own discipline.
+ *
+ * The scratch path carries the writer's pid and a serial, not a bare `.tmp`.
+ * The manager serializes its own verbs, but a profile is shared — the web
+ * GUI, a CLI and the desktop client can all be editing the same manifest —
+ * and two writers sharing one scratch name interleave into a file that is
+ * neither version. Distinct scratch names make the rename the only race, and
+ * a rename is the atomic step this function exists for.
+ */
 export async function atomicWrite(file: string, content: string): Promise<void> {
-  await writeFile(`${file}.tmp`, content, 'utf8')
-  await rename(`${file}.tmp`, file)
+  const scratch = `${file}.${String(process.pid)}.${String(atomicWriteSeq += 1)}.tmp`
+  try {
+    await writeFile(scratch, content, 'utf8')
+    await rename(scratch, file)
+  } catch (error) {
+    // A failed rename would otherwise leave the scratch file behind for good.
+    await rm(scratch, { force: true }).catch(() => {})
+    throw error
+  }
 }
 
 /** Read and parse the profile manifest. */

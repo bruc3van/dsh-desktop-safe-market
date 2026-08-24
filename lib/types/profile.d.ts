@@ -57,7 +57,16 @@ export type ProfileManifest = Record<string, unknown> & {
         };
     };
 };
-/** Write a file atomically (tmp + rename), the include's own discipline. */
+/**
+ * Write a file atomically (tmp + rename), the include's own discipline.
+ *
+ * The scratch path carries the writer's pid and a serial, not a bare `.tmp`.
+ * The manager serializes its own verbs, but a profile is shared — the web
+ * GUI, a CLI and the desktop client can all be editing the same manifest —
+ * and two writers sharing one scratch name interleave into a file that is
+ * neither version. Distinct scratch names make the rename the only race, and
+ * a rename is the atomic step this function exists for.
+ */
 export declare function atomicWrite(file: string, content: string): Promise<void>;
 /** Read and parse the profile manifest. */
 export declare function readManifest(profileDir: string): Promise<ProfileManifest>;

@@ -12,58 +12,9 @@
  */
 import { z } from 'zod'
 import type { InvocationDescriptor } from '@deepseek-ai/dsh-typert-protocol'
-
-/**
- * This package's name, and with it the cordis plugin name, the client bundle
- * id, and the bundle entry a profile lists. It lives in the contract module
- * because both halves of the entry split need it and neither may import the
- * other: the body would drag the entry's bundle in behind it, and the entry
- * must stay free of anything the body reaches.
- */
-export const PACKAGE_NAME = 'dsh-desktop-safe-market'
-
-/**
- * The only `owner/name` shape the market keeps. The repository link is
- * rebuilt on the Host from a slug matching this pattern, and the wire codec
- * enforces the same shape, so the "host rebuilds the href" invariant is held
- * by the contract rather than by a comment.
- */
-export const REPOSITORY_SLUG_PATTERN = /^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/
-
-/**
- * The only branch-name shape the review prompt may interpolate. Branches are
- * remote text from a public snapshot: anything outside this pattern (no
- * whitespace, no punctuation beyond `._/-`) could inject instructions into
- * the prompt or steer the tarball path, so the Host falls back to `main` for
- * it. The trailing checks mirror the git ref rules GitHub enforces: no `..`
- * anywhere, no segment may be `.` or end in `.`/`.lock`, and the name must
- * not end in `/` or `.`.
- */
-export const BRANCH_PATTERN = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/
-
-/**
- * The only version shape the upgrade prompt may interpolate.
- *
- * An installed package's `version` is read from a manifest on this machine,
- * but it is still text this plugin did not write: the package that authored
- * it is exactly the one the upgrade prompt is about. Anything with a space in
- * it could carry a sentence into an instruction the user is one keystroke
- * from sending, so the prompt names the version only when it looks like one
- * (and says "the installed version" otherwise).
- */
-export const VERSION_PATTERN = /^[A-Za-z0-9][A-Za-z0-9.+_-]{0,63}$/
-
-/** Whether a version string is safe to interpolate into the prompt. */
-export function isSafeVersion(value: string): boolean {
-  return VERSION_PATTERN.test(value)
-}
-
-/** Whether a trimmed branch name is safe to interpolate into the prompt. */
-export function isSafeBranchName(value: string): boolean {
-  if (!BRANCH_PATTERN.test(value)) return false
-  if (value.includes('..') || value.includes('//') || value.endsWith('/') || value.endsWith('.')) return false
-  return !value.split('/').some(segment => segment === '.' || segment.endsWith('.lock'))
-}
+// The dependency-free shapes live in their own module so `./index.ts` and
+// `./catalog.ts` can reach them without evaluating every codec below.
+import { isSafeBranchName, PACKAGE_NAME_PATTERN, REPOSITORY_SLUG_PATTERN } from './shapes.ts'
 
 /** One row of the market: a community plugin the catalog kept. */
 export interface MarketPlugin {
@@ -170,13 +121,6 @@ export interface SafeMarketSettings {
 
 /** One field update sent through the plugin-owned settings Remote. */
 export type SafeMarketSettingsUpdate = { readonly field: 'enabled'; readonly value: boolean }
-
-/**
- * The only npm package-name shape the installed-panel verbs accept. The
- * membership check against the profile's bundle list is the real gate; this
- * codec just keeps wire text in the shape of a name at all.
- */
-export const PACKAGE_NAME_PATTERN = /^(?:@[A-Za-z0-9._-]+\/)?[A-Za-z0-9._-]+$/
 
 /** Live state of one loader entry an installed bundle introduces. */
 export interface MarketInstalledEntry {

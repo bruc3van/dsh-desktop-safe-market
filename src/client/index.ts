@@ -26,7 +26,6 @@ import type {
   MarketCatalogResult,
   MarketEnvironment,
   MarketInstalledResult,
-  MarketPlugin,
   MarketSkillsResult,
   SafeMarketSettings,
   SafeMarketSettingsUpdate,
@@ -99,7 +98,7 @@ function wait(ms: number): Promise<void> {
  * @param ctx - client root context.
  */
 export function apply(ctx: ClientContext): void {
-  adoptStyles()
+  ctx.effect(() => adoptStyles(), 'dsh-desktop-safe-market: styles')
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-desktop-safe-market: dictionaries')
   // The settings shell hardcodes section nav icons by id (unknown ids get the
   // gear); re-skin this section's row with the market's own storefront.
@@ -325,7 +324,7 @@ export function apply(ctx: ClientContext): void {
   /**
    * The install hand-off: resolve the workspace, then stage the prompt in it.
    */
-  const install = async (target: MarketPlugin, prompt: string): Promise<InstallOutcome> => {
+  const install = async (prompt: string): Promise<InstallOutcome> => {
     const workspaces = ctx.get('workspaces') as IWorkspaces
     const sessions = ctx.get('sessions') as unknown as ISessions
 
@@ -345,7 +344,7 @@ export function apply(ctx: ClientContext): void {
   }
 
   /** The install hand-off for a deployment with no workspace yet. */
-  const installIntoNewWorkspace = async (target: MarketPlugin, prompt: string): Promise<InstallOutcome> => {
+  const installIntoNewWorkspace = async (prompt: string): Promise<InstallOutcome> => {
     const chosen = await chooseWorkspaceId()
     if (!chosen.ok) return chosen
     return await stageIn(chosen.id, prompt)

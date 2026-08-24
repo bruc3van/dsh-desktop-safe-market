@@ -9,8 +9,9 @@
  * over: a short list that looks whole is a wrong answer, not a tidy one.
  */
 import { useEffect, useState, type ReactElement } from 'react'
-import type { MarketSkill, MarketSkillsResult } from '../contract.ts'
+import type { MarketSkillsResult } from '../contract.ts'
 import type { MarketLocale } from './copy.ts'
+import { matchesSkill } from './rows.ts'
 
 /** The reader's sentinel for "nothing to address" (see client/index.ts). */
 export const NO_SESSION = 'no-session'
@@ -23,13 +24,6 @@ type SkillsState =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly result: MarketSkillsResult }
   | { readonly status: 'error'; readonly message: string }
-
-/** Whether one skill survives the current query. */
-function matches(skill: MarketSkill, query: string): boolean {
-  if (query === '') return true
-  const haystack = `${skill.name} ${skill.description} ${skill.whenToUse} ${skill.provider}`.toLocaleLowerCase()
-  return query.split(/\s+/).every(word => haystack.includes(word))
-}
 
 /** The Skills page. */
 export function SkillsView({ t, listSkills }: {
@@ -50,9 +44,11 @@ export function SkillsView({ t, listSkills }: {
   }, [listSkills])
 
   const result = state.status === 'ready' ? state.result : null
+  // Normalised once, not once per skill.
+  const needle = query.trim().toLocaleLowerCase()
   const shown = result === null
     ? []
-    : result.skills.filter(skill => matches(skill, query.trim().toLocaleLowerCase()))
+    : result.skills.filter(skill => matchesSkill(skill, needle))
 
   return (
     <div className="dsh_market_page">

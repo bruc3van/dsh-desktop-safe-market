@@ -55,12 +55,12 @@
   },
   "files": [
     "lib",
+    "!lib/**/*.map",
     "cordis.patch.yml",
     "dsh.plugin.json",
     "README.md",
     "README_EN.md",
-    "LICENSE",
-    "assets"
+    "LICENSE"
   ],
   "scripts": {
     "build": "node build.mjs",

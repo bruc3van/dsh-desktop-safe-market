@@ -37,7 +37,8 @@ import { registerSafeMarketSettings } from './settings.ts'
 import { readSkills } from './skills.ts'
 import { adoptDomainState, initialDomainState, safeMarketDomainSpec, type SafeMarketDomainState } from './store.ts'
 import { TYPERT_MANIFEST } from './typert.ts'
-import { PACKAGE_NAME, type SafeMarketSettingsUpdate } from './contract.ts'
+import type { SafeMarketSettingsUpdate } from './contract.ts'
+import { PACKAGE_NAME } from './shapes.ts'
 import type { Config } from './index.ts'
 
 /**

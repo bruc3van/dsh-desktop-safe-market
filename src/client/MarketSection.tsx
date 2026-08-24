@@ -16,7 +16,10 @@
  * so staging the prompt can end with the user looking at the session it was
  * staged in.
  */
-import { useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore, type ReactElement } from 'react'
+import {
+  useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
+  type KeyboardEvent as ReactKeyboardEvent, type ReactElement,
+} from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
 import type {
@@ -27,9 +30,12 @@ import type {
   MarketSkillsResult,
   SafeMarketSettings,
 } from '../contract.ts'
-import { isSafeVersion, PACKAGE_NAME } from '../contract.ts'
+import { isSafeVersion, PACKAGE_NAME } from '../shapes.ts'
 import type { MarketLocale } from './copy.ts'
 import { describeInstalled, ownedBy, ownedIndexOf, shortName } from './owned.ts'
+import {
+  INSTALLED_FILTER, SELF_CARD_KEY, SELF_MARKET_PLUGIN, matches, starCount, stateOf,
+} from './rows.ts'
 import { SkillsView } from './SkillsView.tsx'
 
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
@@ -80,12 +86,12 @@ export interface MarketSectionInjected {
   /** Read the skills this deployment resolves. */
   listSkills: () => Promise<MarketSkillsResult>
   /** Open a session in the current or most recent workspace and stage the given prompt. */
-  install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>
+  install: (prompt: string) => Promise<InstallOutcome>
   /**
    * The same hand-off for someone who has no workspace yet: pick a directory
    * through the Host's own picker, register it, then stage the prompt in it.
    */
-  installIntoNewWorkspace: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>
+  installIntoNewWorkspace: (prompt: string) => Promise<InstallOutcome>
   /** Pick a directory and register it as a Workspace, installing nothing. */
   chooseWorkspace: () => Promise<ChooseWorkspaceOutcome>
   /** Live answer to "is there a workspace to install into?". */
@@ -124,64 +130,10 @@ type CardState =
 
 type Page = 'plugins' | 'skills'
 
-/**
- * The market's own fixed repository identity. Unlike catalog rows this is
- * package-owned source, not remote snapshot text; keeping the complete
- * MarketPlugin shape lets the header use the exact same hand-off as a card.
- */
-const SELF_MARKET_PLUGIN: MarketPlugin = {
-  fullName: 'bruc3van/dsh-desktop-safe-market',
-  owner: 'bruc3van',
-  name: PACKAGE_NAME,
-  url: 'https://github.com/bruc3van/dsh-desktop-safe-market',
-  description: '',
-  stars: 0,
-  language: 'TypeScript',
-  license: 'MIT',
-  pushedAt: '',
-  defaultBranch: 'master',
-  category: 'market',
-  categoryZh: '市场',
-  categoryEn: 'Marketplace',
-}
-
-/** `1998` → `2.0k`: a card has room for the magnitude, not the digits. */
-function starCount(stars: number): string {
-  if (stars < 1_000) return String(stars)
-  return `${(stars / 1_000).toFixed(stars < 10_000 ? 1 : 0)}k`
-}
-
-/** Whether one row survives the current query and category filter. */
-function matches(item: MarketPlugin, query: string, category: string, english: boolean): boolean {
-  if (category !== '' && item.category !== category) return false
-  if (query === '') return true
-  const haystack = `${item.fullName} ${item.description} ${english ? item.categoryEn : item.categoryZh} ${item.language}`
-    .toLocaleLowerCase()
-  return query.split(/\s+/).every(word => haystack.includes(word))
-}
-
-/** The status a package row shows, from its own live facts. */
-function stateOf(item: MarketInstalledPackage): 'readFailed' | 'unregistered' | 'disabled' | 'failed' | 'running' | 'installed' {
-  if (item.error !== '') return 'readFailed'
-  if (item.unregistered) return 'unregistered'
-  // A bundle whose patch declares no entry rows is neither running nor
-  // stopped — installed, with nothing live to report.
-  if (item.entries.length === 0) return 'installed'
-  if (!item.enabled) return 'disabled'
-  return item.entries.some(entry => entry.phase === 'failed') ? 'failed' : 'running'
-}
-
 type InstalledState =
   | { readonly status: 'loading' }
   | { readonly status: 'ready'; readonly result: MarketInstalledResult }
   | { readonly status: 'error'; readonly message: string }
-
-/**
- * The category chip that selects the installed set instead of a catalog
- * category. The catalog's own keys are slugs from the shortlist, so a value
- * carrying a colon cannot collide with one.
- */
-const INSTALLED_FILTER = 'dsh:installed'
 
 /**
  * The installed set's own state and verbs: the plugins installed into this
@@ -224,16 +176,32 @@ function useInstalled({ t, active, listInstalled, setInstalledEnabled, uninstall
   const [notice, setNotice] = useState('')
   const [actionError, setActionError] = useState('')
   const mounted = useRef(true)
-  useEffect(() => () => { mounted.current = false }, [])
+  // Set on mount as well as cleared on unmount: React 18 StrictMode runs the
+  // cleanup once immediately after the first mount, and a ref that is only
+  // ever cleared would stay false for the rest of the component's life —
+  // every async answer below would then be silently dropped.
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+  // The read's generation. `mounted` answers "is this component still here?";
+  // this answers the separate "is this still the read whose answer we want?".
+  // StrictMode dispatches the mount read twice, and a verb below can land a
+  // fresher list while an earlier read is still in flight — without a token
+  // the older answer resolves last and overwrites the newer one. Each read
+  // captures the value it bumped to; a verb that writes fresh state advances
+  // it too, retiring any read that has not yet returned.
+  const readSeq = useRef(0)
 
   const load = useCallback((): void => {
     if (!active) return
+    const seq = (readSeq.current += 1)
     setState(previous => (previous.status === 'ready' ? previous : { status: 'loading' }))
     void listInstalled().then((result) => {
-      if (!mounted.current) return
+      if (!mounted.current || seq !== readSeq.current) return
       setState({ status: 'ready', result })
     }, (error: unknown) => {
-      if (!mounted.current) return
+      if (!mounted.current || seq !== readSeq.current) return
       setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
     })
   }, [active, listInstalled])
@@ -252,6 +220,8 @@ function useInstalled({ t, active, listInstalled, setInstalledEnabled, uninstall
     setNotice('')
     void setInstalledEnabled(item.packageName, !item.enabled).then((result) => {
       if (!mounted.current) return
+      // This verb's own list is the fresh one; retire any read still in flight.
+      readSeq.current += 1
       setBusy(null)
       setState({ status: 'ready', result })
     }, (error: unknown) => {
@@ -271,6 +241,8 @@ function useInstalled({ t, active, listInstalled, setInstalledEnabled, uninstall
     setNotice('')
     void uninstallInstalled(item.packageName).then((result) => {
       if (!mounted.current) return
+      // This verb's own list is the fresh one; retire any read still in flight.
+      readSeq.current += 1
       setBusy(null)
       setConfirming(null)
       // The host may have an outcome line of its own (e.g. the in-session
@@ -526,13 +498,27 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   // MarketSection), but the settings shell can still unmount the whole
   // section mid-read — the guard stops the late answer from touching state.
   const mounted = useRef(true)
-  useEffect(() => () => { mounted.current = false }, [])
+  // Set on mount as well as cleared on unmount: React 18 StrictMode runs the
+  // cleanup once immediately after the first mount, and a ref that is only
+  // ever cleared would stay false for the rest of the component's life —
+  // every async answer below would then be silently dropped.
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
+  // The read's generation, distinct from `mounted`: StrictMode dispatches the
+  // first read twice and a force-refresh can overlap the background read, so
+  // two `loadCatalog` calls may be in flight at once. Each captures the value
+  // it bumped to, and only the latest is allowed to land — otherwise the
+  // slower, older answer resolves last and overwrites the newer catalog.
+  const readSeq = useRef(0)
 
   const load = useCallback((force: boolean) => {
+    const seq = (readSeq.current += 1)
     setState(previous => (previous.status === 'ready' ? previous : { status: 'loading' }))
     if (force) setRefreshing(true)
     void loadCatalog(force).then((result) => {
-      if (!mounted.current) return
+      if (!mounted.current || seq !== readSeq.current) return
       setRefreshing(false)
       if (result.catalog === null) {
         setState({ status: 'error', message: result.error })
@@ -540,7 +526,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
       }
       setState({ status: 'ready', catalog: result.catalog, stale: result.stale })
     }, (error: unknown) => {
-      if (!mounted.current) return
+      if (!mounted.current || seq !== readSeq.current) return
       setRefreshing(false)
       setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
     })
@@ -601,10 +587,13 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   }
 
   const catalog = state.status === 'ready' ? state.catalog : null
+  // Normalised once, not once per row: this runs on every keystroke over the
+  // whole catalog.
+  const needle = query.trim().toLocaleLowerCase()
   const shown = catalog === null
     ? []
     : catalog.items
-      .filter(item => matches(item, query.trim().toLocaleLowerCase(), category, english))
+      .filter(item => matches(item, needle, category, english))
       // The All view answers "what the community uses", so it ranks by stars;
       // a category chip keeps the publisher's order, whose front rows are its
       // own picks. `filter` copies, so the sort cannot reorder the catalog
@@ -882,7 +871,14 @@ export function MarketSection({
   // section unmounted stops touching state.
   const cardsRef = useRef<Readonly<Record<string, CardState>>>({})
   const mounted = useRef(true)
-  useEffect(() => () => { mounted.current = false }, [])
+  // Set on mount as well as cleared on unmount: React 18 StrictMode runs the
+  // cleanup once immediately after the first mount, and a ref that is only
+  // ever cleared would stay false for the rest of the component's life —
+  // every async answer below would then be silently dropped.
+  useEffect(() => {
+    mounted.current = true
+    return () => { mounted.current = false }
+  }, [])
   // One install hand-off at a time: two cards clicked back to back must not
   // open two sessions and stage two drafts.
   const installBusy = Object.values(cards).some(card => card.status === 'busy' || card.status === 'picking')
@@ -892,13 +888,14 @@ export function MarketSection({
     if (mounted.current) setCards(cardsRef.current)
   }
 
-  const runInstall = (target: MarketPlugin, prompt: string, viaNewWorkspace: boolean): void => {
+  const runInstall = (target: MarketPlugin, prompt: string, viaNewWorkspace: boolean,
+    cardKey: string = target.fullName): void => {
     if (Object.values(cardsRef.current).some(card => card.status === 'busy' || card.status === 'picking')) return
-    report(target.fullName, { status: viaNewWorkspace ? 'picking' : 'busy' })
+    report(cardKey, { status: viaNewWorkspace ? 'picking' : 'busy' })
     const handOff = viaNewWorkspace ? installIntoNewWorkspace : install
-    void handOff(target, prompt).then((outcome) => {
+    void handOff(prompt).then((outcome) => {
       if (outcome.ok) {
-        report(target.fullName, { status: 'staged' })
+        report(cardKey, { status: 'staged' })
         // The prompt is staged in a session the user cannot see from here.
         // Closing is the second half of the hand-off, not a courtesy.
         close()
@@ -908,7 +905,7 @@ export function MarketSection({
       // the card keeps the offer up rather than turning into an error the
       // user has to translate back into an action.
       if (outcome.reason === 'no-workspace' || outcome.reason === 'cancelled') {
-        report(target.fullName, {
+        report(cardKey, {
           status: 'needs-workspace',
           message: outcome.reason === 'cancelled' ? t('install.cancelled') : t('install.noWorkspace'),
         })
@@ -917,9 +914,9 @@ export function MarketSection({
       const message = outcome.reason === 'not-ready'
         ? t('install.notReady')
         : t('install.failed', { reason: outcome.message })
-      report(target.fullName, { status: 'error', message })
+      report(cardKey, { status: 'error', message })
     }, (error: unknown) => {
-      report(target.fullName, {
+      report(cardKey, {
         status: 'error',
         message: t('install.failed', { reason: error instanceof Error ? error.message : String(error) }),
       })
@@ -930,7 +927,25 @@ export function MarketSection({
     { id: 'plugins', label: t('tab.plugins') },
     { id: 'skills', label: t('tab.skills') },
   ]
-  const selfUpgrade = cards[SELF_MARKET_PLUGIN.fullName]
+
+  /**
+   * Keyboard navigation for the tablist. The roving `tabIndex` below puts one
+   * tab in the tab order; the ARIA pattern then expects the arrow keys to move
+   * between them, which is the half that was missing — without it the second
+   * tab is unreachable from the keyboard at all.
+   */
+  const onTabKey = (event: ReactKeyboardEvent<HTMLButtonElement>, index: number): void => {
+    const step = event.key === 'ArrowRight' ? 1 : event.key === 'ArrowLeft' ? -1 : 0
+    const next = step !== 0
+      ? (index + step + pages.length) % pages.length
+      : event.key === 'Home' ? 0 : event.key === 'End' ? pages.length - 1 : -1
+    if (next < 0) return
+    event.preventDefault()
+    setPage(pages[next]!.id)
+    // Focus follows selection, as the pattern's automatic-activation form asks.
+    document.getElementById(`${tabsId}-tab-${pages[next]!.id}`)?.focus()
+  }
+  const selfUpgrade = cards[SELF_CARD_KEY]
 
   const runSelfUpgrade = (): void => {
     const profile = snapshot.profile
@@ -940,7 +955,7 @@ export function MarketSection({
       profile,
       branch: SELF_MARKET_PLUGIN.defaultBranch,
       installed: isSafeVersion(snapshot.version) ? `${PACKAGE_NAME} ${snapshot.version}` : PACKAGE_NAME,
-    }), workspaceReadiness.getSnapshot() === 'none')
+    }), workspaceReadiness.getSnapshot() === 'none', SELF_CARD_KEY)
   }
 
   return (
@@ -974,7 +989,7 @@ export function MarketSection({
         </p>
       )}
       <div className="dsh_market_tabs" role="tablist" aria-label={t('tabs.aria')}>
-        {pages.map(entry => (
+        {pages.map((entry, index) => (
           <button
             key={entry.id}
             id={`${tabsId}-tab-${entry.id}`}
@@ -986,6 +1001,7 @@ export function MarketSection({
             data-active={page === entry.id ? 'true' : undefined}
             tabIndex={page === entry.id ? 0 : -1}
             onClick={() => { setPage(entry.id) }}
+            onKeyDown={(event) => { onTabKey(event, index) }}
           >
             {entry.label}
           </button>

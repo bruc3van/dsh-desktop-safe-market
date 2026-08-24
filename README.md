@@ -66,7 +66,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 
 从源码装会被 pnpm 的 `allowBuilds` 门禁拦下——这是「允许该仓库的代码在安装时于你的机器上执行」的授权，提示词要求 Agent 把 pnpm 打印的键原样交给你确认、写进 profile 的 `pnpm-workspace.yaml` 后再重跑。`dsh` 命令由 Agent 自己定位并执行，不需要你替它跑：最精确的是直接取正在运行的 dsh 进程（按进程名找——进程名不一定是 dsh，可能是 node 或客户端进程——不要假设固定端口）的可执行文件路径，找不到再依次查环境变量、默认安装目录与 npm/pnpm 全局 bin。全程只查这些常规位置，不做全盘扫描、不提权（sudo / 以管理员运行）。装完用 `dsh plugin --profile web list` 确认实际装的版本即可，然后告诉你重启 dsh 才会生效。
 
-发不发送由你按回车决定。没有任何工作区时，卡片会直接告诉你先去侧边栏选一个。
+发不发送由你按回车决定。还没有任何工作区时，页面顶部会先说明这个前提，卡片上的按钮也变成「选择文件夹并安装」——点一下直接开系统目录选择器，选完就地注册成工作区并继续安装，不用中途跑去侧边栏再回来重来一遍。取消选择只是取消，不算失败。
 
 ![安全安装](./assets/screenshots/marketplace-sec-install.png)
 
@@ -113,7 +113,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 
 - 上游对带 `dsh-plugin` 标签的爬取（`repositories.json`）做过滤：要求有简介、剔除归档/停用仓库、应用 `curated.json` 人工排除名单；
 - 分类与**均衡发牌**也在上游——不是纯按 star 排序（那样两三个分类就会吃掉几乎所有席位），而是每类先出最强、再出次强，至多 300 席；
-- 本插件按该顺序截断到 `marketSize`（默认 1000），并在 Host 侧重校验每一行后才发给浏览器；
+- 本插件按该顺序截断到 `marketSize`（默认 1000，是上限兜底而非目标条数——实际条数由上游发牌决定），并在 Host 侧重校验每一行后才发给浏览器；
 - **网络韧性（自动切换）**：默认从 GitHub raw 读取。当默认地址不可达或请求出错（超时、DNS/连接失败、HTTP 错误）时，自动改用同一文件的 jsDelivr CDN 镜像（[bruc3van/awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 的 `cdn.jsdelivr.net/gh/…@main/data/market.json`，带 ETag，可走条件请求）；回答过的那一侧会被记住（粘性），下次读取直接走它，镜像失败再回到 GitHub，无需任何配置。自己配置过 `catalogBase` 的部署不受影响——只读它指定的那一个来源。
 
 接口协议——字段形状、截断上限、分支名白名单、顺序不变量与版本规则——见 [docs/market-json-spec.md](docs/market-json-spec.md)。
@@ -125,7 +125,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `catalogBase` | awesome-dsh-plugin 的 `data/` 目录 | 指向该文件的镜像 |
-| `marketSize` | `1000` | 市场展示多少个插件 |
+| `marketSize` | `1000` | 展示条数的上限。条数由上游决定（`market.json` 至多 300 条），这个默认值远高于上游上限，是兜底而不是调节钮 |
 
 ## 安全边界
 
@@ -133,12 +133,13 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 - **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选后的至多 300 行，而不是 2.4 MB 爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；默认地址连不上时自动改用 jsDelivr 镜像，两边都连不上才用上次的目录）；
 - **仓库链接由 `owner/name` 重新拼装**，不采信文件里的地址，因此被投毒的文件无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
 - **默认分支名进提示词前经过模式校验**（`[A-Za-z0-9][A-Za-z0-9._/-]*` 加 git ref 规则，不合格一律回落 `main`），提示词同时声明 URL 与分支为市场提供的不透明字面量——被投毒的分支名无法向审查提示词注入指令；
+- **配置的 profile 名同样要过形状校验**（`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`）：它是唯一一个以配置身份进入提示词的值，会拼进 `--profile` 参数；不合格时插件直接拒绝启动，而不是发出一条自己都说不清目标的命令；
 - 卡片全部以纯文本渲染；
 - 关闭状态下 Remote 接口直接拒绝，无法绕过开关读取目录；
 - 安装交接全程走官方公开服务（workspaces / sessions / conversation），不读 DOM、不发送消息；
 - 已安装面板的动词只接受**经 wire codec 校验且实际在 profile 清单里的包名**；停用与内置座位卸载落地为本机文件编辑与 loader 调用。用户插件卸载会在 profile 目录运行 `pnpm remove`（包名再经同一套形状校验，不走 shell 拼接），失败时仍改清单并在面板说明；写入用户补丁层时保留原有注释与手工行。
 
-**收录不代表安全背书。** Agent 的审查是一次有依据的辅助判断，不是结论——请自己看过再决定。
+**收录不代表安全背书。** 点「安全安装」只把审查提示词填进新会话，发不发送由你按回车决定；发送之后，Agent 发现可疑会停下来说明并问你，判定干净则直接装完再回来报告——**你的确认点在按回车那一刻，以及提示词要求它停下来的每一处**。Agent 的审查是一次有依据的辅助判断，不是安全结论。
 
 ## 已知限制
 
@@ -150,7 +151,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 ## 开发
 
 ```sh
-pnpm install --ignore-workspace
+pnpm install         # 不要加 --ignore-workspace：pnpm 11 只从 workspace 文件读构建脚本授权
 pnpm run typecheck
 pnpm test          # node --test，目录归约与读取器的回归测试
 pnpm run build     # lib/index.js（Host，ESM）、lib/client.js（浏览器，ModuleLoader 包裹）、lib/types

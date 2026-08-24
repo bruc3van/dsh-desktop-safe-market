@@ -29,7 +29,7 @@
 import type { Context } from '@deepseek-ai/cordis'
 import z from '@deepseek-ai/schemastery'
 import { DEFAULT_CATALOG_BASE } from './catalog.ts'
-import { PACKAGE_NAME } from './contract.ts'
+import { PACKAGE_NAME, PROFILE_NAME_PATTERN } from './shapes.ts'
 
 /** Cordis plugin name (the Loader entry and client bundle id). */
 export const name = PACKAGE_NAME
@@ -95,6 +95,19 @@ export const Config = z.object({
  */
 export function apply(ctx: Context, config?: Config): void {
   const resolved: Config = Config(config ?? {})
+  // The profile is the one configured value that leaves this process as
+  // prompt text: it names `--profile` in the install command staged into the
+  // composer. `resolveProfileDir` holds it to the launcher's directory rules,
+  // which admit a name with a space in it; an instruction the user is one
+  // keystroke from sending must not be able to carry a second word. Config is
+  // not remote text, so this is defence in depth — and the market declines
+  // rather than staging a command aimed at something it cannot name.
+  if (!PROFILE_NAME_PATTERN.test(resolved.profile)) {
+    console.error('[dsh-desktop-safe-market] refusing to start: the configured profile name '
+      + `${JSON.stringify(resolved.profile)} is not a plain profile name, and it would be interpolated `
+      + 'into the install command this market stages for review')
+    return
+  }
   ctx.effect(async () => {
     // Two guards, because the two phases fail for unrelated reasons and the
     // difference is the whole diagnostic value of this file. Importing the

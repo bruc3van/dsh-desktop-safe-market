@@ -29,6 +29,18 @@ mkdirSync('lib', { recursive: true })
 const dshExternal = ['@deepseek-ai/cordis', '@deepseek-ai/dsh-*']
 
 /**
+ * Minify every artifact, but never the names.
+ *
+ * The Typert manifest names its service class as a string (`exportName:
+ * 'SafeMarketRuntime'`), and cordis reads constructor names for diagnostics;
+ * `minifyIdentifiers` would rename the class out from under both. `keepNames`
+ * restores `.name` on every function and class, which is the only thing those
+ * readers look at — so the rename stays invisible to them and the bytes still
+ * come off.
+ */
+const minified = { minify: true, keepNames: true }
+
+/**
  * A bundled CommonJS dependency keeps its own `require` calls, and esbuild
  * rewrites them to a shim that throws unless a real `require` is in scope —
  * which, in an ESM output, there is not. `yaml` reaches for `process` while
@@ -56,6 +68,7 @@ for (const entry of hostEntries) {
     platform: 'node',
     target: ['node22'],
     sourcemap: true,
+    ...minified,
     external: entry === 'src/index.ts' ? [...dshExternal, './plugin.js'] : dshExternal,
     banner: esmRequireBanner,
     logLevel: 'info',
@@ -83,6 +96,7 @@ await build({
   platform: 'browser',
   target: ['es2022'],
   sourcemap: true,
+  ...minified,
   jsx: 'automatic',
   external: [...dshExternal, 'react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime', 'scheduler'],
   banner: {

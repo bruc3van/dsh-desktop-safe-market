@@ -19,7 +19,7 @@
 import { type ReactElement } from 'react';
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client';
-import type { MarketCatalog, MarketInstalledResult, MarketPlugin, MarketSkillsResult, SafeMarketSettings } from '../contract.ts';
+import type { MarketCatalog, MarketInstalledResult, MarketSkillsResult, SafeMarketSettings } from '../contract.ts';
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
 export interface SafeMarketSnapshot {
     readonly value: SafeMarketSettings;
@@ -87,12 +87,12 @@ export interface MarketSectionInjected {
     /** Read the skills this deployment resolves. */
     listSkills: () => Promise<MarketSkillsResult>;
     /** Open a session in the current or most recent workspace and stage the given prompt. */
-    install: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>;
+    install: (prompt: string) => Promise<InstallOutcome>;
     /**
      * The same hand-off for someone who has no workspace yet: pick a directory
      * through the Host's own picker, register it, then stage the prompt in it.
      */
-    installIntoNewWorkspace: (target: MarketPlugin, prompt: string) => Promise<InstallOutcome>;
+    installIntoNewWorkspace: (prompt: string) => Promise<InstallOutcome>;
     /** Pick a directory and register it as a Workspace, installing nothing. */
     chooseWorkspace: () => Promise<ChooseWorkspaceOutcome>;
     /** Live answer to "is there a workspace to install into?". */

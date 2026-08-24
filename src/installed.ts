@@ -40,8 +40,8 @@ import type { Entry, Loader } from '@deepseek-ai/cordis-plugin-loader'
 import { spawn } from 'node:child_process'
 import { mkdir, readFile, rm } from 'node:fs/promises'
 import { dirname, join } from 'node:path'
+import { PACKAGE_NAME_PATTERN } from './shapes.ts'
 import {
-  PACKAGE_NAME_PATTERN,
   type MarketInstalledEntry,
   type MarketInstalledPackage,
   type MarketInstalledResult,
@@ -405,15 +405,22 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     // live nudge below finds nothing to nudge (a launcher without the watcher
     // still converges at the next recompose or boot).
     await setEntryDisabled(patchPath, ids, !enabled)
-    await applyLive(ids, enabled)
     // Whatever rows the patch layer now carries say what the user just asked
     // for, so a same-session uninstall's stop rows for this package are no
     // longer ours: an enable removed them, a deliberate disable is the user's
-    // own and the boot sweep must not take it back. Drop the record. (A
-    // failure here fails the verb: leaving the record would let the next
-    // boot's sweep undo a disable the user just asked for, and the retry is
-    // idempotent — the rows and the live nudge have already landed.)
-    await writePending((await readPending()).filter(record => record.packageName !== packageName))
+    // own and the boot sweep must not take it back. Drop the record.
+    //
+    // BEFORE the live nudge, not after. The nudge is the half that can fail
+    // for reasons outside this profile (a loader that refuses, an entry mid
+    // teardown), and a throw between the rows and this write would leave the
+    // record standing over rows that now say the opposite — the next boot's
+    // sweep would then take back the disable the user just asked for. Both
+    // writes are idempotent, so a retry after either one costs nothing.
+    const pending = await readPending()
+    if (pending.some(record => record.packageName === packageName)) {
+      await writePending(pending.filter(record => record.packageName !== packageName))
+    }
+    await applyLive(ids, enabled)
     return await list()
   }
 
@@ -499,8 +506,13 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     }
     const result = await list()
     if (faults.length === 0) return result
+    // `may-run` is specifically "the package was not stopped". A failed sweep
+    // record is the opposite — the stop rows DID land and are now stranded in
+    // the user's patch file with nothing scheduled to take them back — so it
+    // belongs with the leftover work, not with the two faults that leave the
+    // plugin running.
     const mayRun = faults.some(fault =>
-      fault.startsWith('stop rows:') || fault.startsWith('live stop:') || fault.startsWith('sweep record:'))
+      fault.startsWith('stop rows:') || fault.startsWith('live stop:'))
     return {
       ...result,
       notice: faults.join('; '),

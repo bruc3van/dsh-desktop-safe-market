@@ -14,3 +14,8 @@ pnpm-workspace.yaml export-ignore
 pnpm-lock.yaml export-ignore
 .gitignore export-ignore
 .gitattributes export-ignore
+
+# Bundled zod code contains generated multiline template literals whose blank
+# lines intentionally carry indentation. They are executable string content,
+# not source whitespace; keep `git diff --check` focused on hand-written files.
+lib/*.js -whitespace

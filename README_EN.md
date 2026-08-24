@@ -66,7 +66,7 @@ dsh plugin --profile web add <npm package | tarball URL | github:owner/name#<com
 
 A source install is blocked by pnpm's `allowBuilds` gate — permission for the repository's code to run on your machine at install time — and the prompt has the agent hand pnpm's printed key to you verbatim, wait for it to land in the profile's `pnpm-workspace.yaml`, and re-run. The agent locates and runs `dsh` itself — you are never asked to run commands: most precisely, it takes the executable path of the running dsh process (found by process name — which need not be `dsh`, it can be node or the client's own process — with no fixed port assumed); failing that, it checks the environment variables, then the default installation directory and the npm/pnpm global bin. It stays in those usual spots — no whole-disk scans, no elevation (no sudo, no run-as-administrator). It confirms the install with `dsh plugin --profile web list` and then tells you dsh must be restarted before the plugin loads.
 
-Whether it is sent is your Enter key. With no workspace at all, the card says so and points you at the sidebar.
+Whether it is sent is your Enter key. With no workspace yet, a notice at the top of the page says so up front, and the card's button becomes **Choose a folder and install** — one click opens the host's own directory picker, registers what you choose as a workspace, and goes on installing, instead of sending you to the sidebar and back to start over. Cancelling the picker is just a cancellation, not a failure.
 
 ![Review and install](./assets/screenshots/marketplace-sec-install.png)
 
@@ -113,7 +113,7 @@ The market reads a single published file, [`market.json`](https://github.com/bru
 
 - the crawl of repositories tagged `dsh-plugin` (`repositories.json`) is filtered there — a description is required, archived/disabled repositories are dropped, and the exclusions in `curated.json` are applied;
 - rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every slot to two or three categories), but entries dealt round by round so every category places its best entry before any places its second, up to 300;
-- this plugin truncates that order to `marketSize` (default 1000) and re-validates every row on the Host before the browser sees it;
+- this plugin truncates that order to `marketSize` (default 1000 — a ceiling, not a target: upstream's deal decides the actual count) and re-validates every row on the Host before the browser sees it;
 - **network resilience (automatic failover)**: the default read comes from GitHub raw. When the default address cannot answer (timeout, DNS/connection failure, or an HTTP error), the read automatically falls over to the jsDelivr CDN mirror of the same published file ([bruc3van/awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin)'s `cdn.jsdelivr.net/gh/…@main/data/market.json`, which answers with an ETag so the conditional request still works). The side that answered is remembered (sticky) and tried first next time, falling back the other way if it later fails — no configuration needed. A deployment with its own `catalogBase` keeps exactly that one source.
 
 The wire protocol — field shapes, truncation limits, the branch-name whitelist, the ordering invariant, and the versioning rules — is documented in [docs/market-json-spec.md](docs/market-json-spec.md).
@@ -125,7 +125,7 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `catalogBase` | awesome-dsh-plugin's `data/` directory | Point the market at a mirror of the same file |
-| `marketSize` | `1000` | How many plugins the market shows |
+| `marketSize` | `1000` | Ceiling on the rows shown. Upstream sets the count (`market.json` publishes at most 300); the default sits well above that cap as a backstop, not as a dial to tune |
 
 ## Security boundary
 
@@ -133,12 +133,13 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 - **the market file is fetched and re-validated on the Host** before the browser sees it — a curated list of at most 300 rows, not the 2.4 MB crawl — and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (one 304, or the jsDelivr mirror when the default address is unreachable, or the last catalog when both are);
 - **repository links are rebuilt from `owner/name`** rather than trusted from the file, so a poisoned file cannot contribute a URL scheme of its own — the wire codec enforces the rebuilt shape, not just a comment;
 - **the default branch is pattern-checked before it reaches the prompt** (`[A-Za-z0-9][A-Za-z0-9._/-]*` plus the git ref rules; anything else falls back to `main`), and the prompt declares both the URL and the branch as opaque marketplace literals — a poisoned branch name cannot inject instructions into the review;
+- **the configured profile name is pattern-checked too** (`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`): it is the one value that reaches the prompt as configuration rather than as catalog data, and it is interpolated into the `--profile` argument — a name outside that shape makes the market refuse to start rather than stage a command it cannot name;
 - every card renders as plain text;
 - while disabled, the Remote refuses — the catalog cannot be read around the switch;
 - the install hand-off runs entirely through published services (workspaces / sessions / conversation): it reads no DOM and sends no message;
 - the installed-panel verbs accept only **wire-codec-checked package names that are actually in the profile manifest**; disable and in-box uninstall land as local file edits plus loader calls. Uninstall of a user plugin runs `pnpm remove` in the profile directory (the name is shape-checked again, never interpolated into a shell); a failed prune still edits the manifest and the panel says so; edits to your patch layer preserve existing comments and hand-written rows.
 
-**Being listed is not a safety endorsement.** The agent's review is an informed second opinion, not a verdict — read it yourself before deciding.
+**Being listed is not a safety endorsement.** Review and install only writes the review prompt into a new session; sending it is your Enter key. Once sent, the agent stops and asks you when something looks suspicious, and installs and reports back when it judges the code clean — **your checkpoints are that Enter key and every stop the prompt makes it take**. The review is an informed second opinion, not a verdict.
 
 ## Known limitations
 
@@ -150,7 +151,7 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 ## Development
 
 ```sh
-pnpm install --ignore-workspace
+pnpm install       # not --ignore-workspace: pnpm 11 reads build approvals only from the workspace file
 pnpm run typecheck
 pnpm test          # node --test, the catalog reduction and reader regressions
 pnpm run build     # lib/index.js (Host ESM), lib/client.js (browser, ModuleLoader-wrapped), lib/types
