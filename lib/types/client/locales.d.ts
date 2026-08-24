@@ -77,7 +77,7 @@ export declare const zh: {
     readonly 'workspace.failed': "创建工作区失败：{reason}";
     readonly 'installed.chip': "已安装";
     readonly 'installed.count': "共 {count} 个";
-    readonly 'installed.body': string;
+    readonly 'installed.body': "当前 profile 用包装上的插件。停用立即生效；卸载会先停用，再删掉包和它的依赖。DSH 自带的插件不在此列。";
     readonly 'installed.loading': "正在读取已安装插件，请稍候…";
     readonly 'installed.failed': "读取已安装插件失败：{reason}";
     readonly 'installed.empty': "还没有通过包安装的插件——从下面的市场挑一个，或运行 dsh plugin add。";

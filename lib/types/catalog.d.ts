@@ -18,8 +18,8 @@
  * Resilience: the primary is the published GitHub file. When the deployment
  * keeps the default base, a primary that cannot answer — timeout, DNS or
  * connection failure, or an HTTP error status — fails the read over to the
- * Gitee mirror of the same published file. The base that answered last is
- * remembered in the durable
+ * jsDelivr CDN mirror of the same published file. The base that answered last
+ * is remembered in the durable
  * cache (when one exists) and tried first on the next read, so an
  * environment where GitHub never answers does not pay the primary's timeout
  * on every refresh; if the sticky base later fails, the chain tries the
@@ -36,11 +36,14 @@ import type { MarketCatalog } from './contract.ts';
  */
 export declare const DEFAULT_CATALOG_BASE = "https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data";
 /**
- * The Gitee mirror of the same published file, tried when the default base
- * fails. Same content, same daily cadence, served from a host that is
- * reachable where GitHub raw is not.
+ * The jsDelivr CDN mirror of the same published file, tried when the default
+ * base fails. jsDelivr serves the repo's `main` from a CDN that is reachable
+ * where GitHub raw is not, answers with an ETag so the conditional-request
+ * path still works, and sets `access-control-allow-origin: *`. Its edge cache
+ * can lag the source by up to its `s-maxage` (hours), which is acceptable for
+ * a fallback the market only reaches when GitHub itself failed.
  */
-export declare const GITEE_CATALOG_BASE = "https://gitee.com/bruc3van/awesome-dsh-plugin/raw/main/data";
+export declare const MIRROR_CATALOG_BASE = "https://cdn.jsdelivr.net/gh/bruc3van/awesome-dsh-plugin@main/data";
 /**
  * Where a parsed catalog survives a restart. The catalog source neither opens
  * nor closes this — the plugin body owns the domain's lifecycle and hands the
