@@ -10,7 +10,7 @@ import {
   createCatalogSource,
   DEFAULT_CATALOG_BASE,
   deriveMarket,
-  GITEE_CATALOG_BASE,
+  MIRROR_CATALOG_BASE,
 } from '../src/catalog.ts'
 import type { MarketCatalog, MarketPlugin } from '../src/contract.ts'
 import { isSafeBranchName, marketPluginSchema } from '../src/contract.ts'
@@ -411,12 +411,12 @@ test('the reader works memory-only when no cache seat exists', async () => {
   }
 })
 
-// ——— the GitHub → Gitee failover ———
+// ——— the GitHub → mirror failover ———
 
 /** One macrotask, enough for a rejected fetch's continuation to run. */
 const tick = (): Promise<void> => new Promise(resolve => setTimeout(resolve, 0))
 
-test('the default base fails over to the Gitee mirror on a network failure', async () => {
+test('the default base fails over to the jsDelivr mirror on a network failure', async () => {
   const fetch = stubFetch()
   try {
     const seat = stubCache()
@@ -427,18 +427,18 @@ test('the default base fails over to the Gitee mirror on a network failure', asy
     fetch.parked[0]!.reject(new Error('The operation was aborted due to timeout'))
     await tick()
     assert.equal(fetch.calls.length, 2, 'the timeout moves the read to the mirror')
-    assert.equal(fetch.calls[1]!.url, `${GITEE_CATALOG_BASE}/market.json`)
+    assert.equal(fetch.calls[1]!.url, `${MIRROR_CATALOG_BASE}/market.json`)
     fetch.parked[1]!.resolve(jsonResponse(
       { schema_version: 1, source_fetched_at: '2026-08-16', entries: [entry({ full_name: 'mirror/row' })] },
-      '"m-gitee"',
+      '"m-mirror"',
     ))
     const result = await pending
     assert.equal(result.catalog?.items[0]?.fullName, 'mirror/row')
     assert.equal(result.stale, false)
     assert.equal(result.error, '')
     assert.equal(seat.writes.length, 1)
-    assert.equal(seat.writes[0]!.activeBase, GITEE_CATALOG_BASE, 'the mirror becomes sticky')
-    assert.equal(seat.writes[0]!.marketEtag, '"m-gitee"')
+    assert.equal(seat.writes[0]!.activeBase, MIRROR_CATALOG_BASE, 'the mirror becomes sticky')
+    assert.equal(seat.writes[0]!.marketEtag, '"m-mirror"')
   } finally {
     fetch.restore()
   }
@@ -458,7 +458,7 @@ test('after a failover the mirror is sticky: the next read goes straight to it',
     // first attempt, and the ETag it issued is the conditional's.
     const second = source.read(true)
     assert.equal(fetch.calls.length, 3)
-    assert.equal(fetch.calls[2]!.url, `${GITEE_CATALOG_BASE}/market.json`)
+    assert.equal(fetch.calls[2]!.url, `${MIRROR_CATALOG_BASE}/market.json`)
     const headers = fetch.calls[2]!.init?.headers as Record<string, string> | undefined
     assert.equal(headers?.['if-none-match'], '"m-g"')
     fetch.parked[2]!.resolve(NOT_MODIFIED())
@@ -474,11 +474,11 @@ test('a cached sticky base is tried first after a restart', async () => {
   const fetch = stubFetch()
   try {
     const seat = stubCache()
-    seat.set({ catalog: makeCatalog([plugin()], 7), marketEtag: '"m-g"', activeBase: GITEE_CATALOG_BASE })
+    seat.set({ catalog: makeCatalog([plugin()], 7), marketEtag: '"m-g"', activeBase: MIRROR_CATALOG_BASE })
     const source = createCatalogSource({ base: DEFAULT_CATALOG_BASE, marketSize: 200, cache: seat.cache })
     const pending = source.read(false)
     assert.equal(fetch.calls.length, 1, 'the sticky base from disk is the only attempt')
-    assert.equal(fetch.calls[0]!.url, `${GITEE_CATALOG_BASE}/market.json`)
+    assert.equal(fetch.calls[0]!.url, `${MIRROR_CATALOG_BASE}/market.json`)
     fetch.parked[0]!.resolve(NOT_MODIFIED())
     const result = await pending
     assert.equal(result.stale, false)
@@ -521,7 +521,7 @@ test('when both bases fail the error names both hosts', async () => {
     assert.equal(result.catalog, null)
     assert.equal(result.stale, false)
     assert.match(result.error, /raw\.githubusercontent\.com: primary down/)
-    assert.match(result.error, /gitee\.com: mirror down/)
+    assert.match(result.error, /cdn\.jsdelivr\.net: mirror down/)
   } finally {
     fetch.restore()
   }
@@ -537,7 +537,7 @@ test('a configured base keeps its single source — no mirror failover', async (
     assert.equal(fetch.calls.length, 1, 'a custom catalogBase is asked once and only once')
     assert.equal(result.catalog, null)
     assert.match(result.error, /mirror down/)
-    assert.doesNotMatch(result.error, /gitee\.com/, 'the bare message names no second host')
+    assert.doesNotMatch(result.error, /cdn\.jsdelivr\.net/, 'the bare message names no second host')
   } finally {
     fetch.restore()
   }

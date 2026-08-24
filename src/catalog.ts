@@ -18,8 +18,8 @@
  * Resilience: the primary is the published GitHub file. When the deployment
  * keeps the default base, a primary that cannot answer — timeout, DNS or
  * connection failure, or an HTTP error status — fails the read over to the
- * Gitee mirror of the same published file. The base that answered last is
- * remembered in the durable
+ * jsDelivr CDN mirror of the same published file. The base that answered last
+ * is remembered in the durable
  * cache (when one exists) and tried first on the next read, so an
  * environment where GitHub never answers does not pay the primary's timeout
  * on every refresh; if the sticky base later fails, the chain tries the
@@ -39,11 +39,14 @@ import { isSafeBranchName, REPOSITORY_SLUG_PATTERN } from './contract.ts'
 export const DEFAULT_CATALOG_BASE = 'https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data'
 
 /**
- * The Gitee mirror of the same published file, tried when the default base
- * fails. Same content, same daily cadence, served from a host that is
- * reachable where GitHub raw is not.
+ * The jsDelivr CDN mirror of the same published file, tried when the default
+ * base fails. jsDelivr serves the repo's `main` from a CDN that is reachable
+ * where GitHub raw is not, answers with an ETag so the conditional-request
+ * path still works, and sets `access-control-allow-origin: *`. Its edge cache
+ * can lag the source by up to its `s-maxage` (hours), which is acceptable for
+ * a fallback the market only reaches when GitHub itself failed.
  */
-export const GITEE_CATALOG_BASE = 'https://gitee.com/bruc3van/awesome-dsh-plugin/raw/main/data'
+export const MIRROR_CATALOG_BASE = 'https://cdn.jsdelivr.net/gh/bruc3van/awesome-dsh-plugin@main/data'
 
 /** The market is refreshed daily upstream; asking more often than this is noise. */
 const REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1_000
@@ -221,7 +224,7 @@ export function createCatalogSource(options: CatalogOptions): CatalogSource {
   // pointed the market at its own mirror or curation gets exactly that one
   // source — silently switching datasets is not what `catalogBase` was
   // configured for.
-  const chain = primary === DEFAULT_CATALOG_BASE ? [primary, GITEE_CATALOG_BASE] : [primary]
+  const chain = primary === DEFAULT_CATALOG_BASE ? [primary, MIRROR_CATALOG_BASE] : [primary]
   // The durable seat is NOT seeded at construction time. The plugin body
   // hands the source a cache port whose backing domain opens asynchronously
   // after this constructor returns, so reading it here would always see the

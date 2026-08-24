@@ -114,7 +114,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 - 上游对带 `dsh-plugin` 标签的爬取（`repositories.json`）做过滤：要求有简介、剔除归档/停用仓库、应用 `curated.json` 人工排除名单；
 - 分类与**均衡发牌**也在上游——不是纯按 star 排序（那样两三个分类就会吃掉几乎所有席位），而是每类先出最强、再出次强，至多 300 席；
 - 本插件按该顺序截断到 `marketSize`（默认 1000），并在 Host 侧重校验每一行后才发给浏览器；
-- **网络韧性（自动切换）**：默认从 GitHub raw 读取。当默认地址不可达或请求出错（超时、DNS/连接失败、HTTP 错误）时，自动改用同一文件在 Gitee 的镜像（[bruc3van/awesome-dsh-plugin](https://gitee.com/bruc3van/awesome-dsh-plugin) 的 `raw/main/data/market.json`）；回答过的那一侧会被记住（粘性），下次读取直接走它，镜像失败再回到 GitHub，无需任何配置。自己配置过 `catalogBase` 的部署不受影响——只读它指定的那一个来源。
+- **网络韧性（自动切换）**：默认从 GitHub raw 读取。当默认地址不可达或请求出错（超时、DNS/连接失败、HTTP 错误）时，自动改用同一文件的 jsDelivr CDN 镜像（[bruc3van/awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 的 `cdn.jsdelivr.net/gh/…@main/data/market.json`，带 ETag，可走条件请求）；回答过的那一侧会被记住（粘性），下次读取直接走它，镜像失败再回到 GitHub，无需任何配置。自己配置过 `catalogBase` 的部署不受影响——只读它指定的那一个来源。
 
 接口协议——字段形状、截断上限、分支名白名单、顺序不变量与版本规则——见 [docs/market-json-spec.md](docs/market-json-spec.md)。
 
@@ -130,7 +130,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 ## 安全边界
 
 - **插件自身不执行任何安装命令**，也没有能执行它的接口——审查与安装因此不可分割；
-- **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选后的至多 300 行，而不是 2.4 MB 爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；默认地址连不上时自动改用 Gitee 镜像，两边都连不上才用上次的目录）；
+- **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选后的至多 300 行，而不是 2.4 MB 爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；默认地址连不上时自动改用 jsDelivr 镜像，两边都连不上才用上次的目录）；
 - **仓库链接由 `owner/name` 重新拼装**，不采信文件里的地址，因此被投毒的文件无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
 - **默认分支名进提示词前经过模式校验**（`[A-Za-z0-9][A-Za-z0-9._/-]*` 加 git ref 规则，不合格一律回落 `main`），提示词同时声明 URL 与分支为市场提供的不透明字面量——被投毒的分支名无法向审查提示词注入指令；
 - 卡片全部以纯文本渲染；
