@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>已安装插件卡片预览</title>
+  <style>
+    :root {
+      --dsw-alias-bg-layer-1: #f5f6f8;
+      --dsw-alias-bg-layer-3: #fff;
+      --dsw-alias-border-l2: #e3e6eb;
+      --dsw-alias-label-primary: #171a21;
+      --dsw-alias-label-secondary: #555d6d;
+      --dsw-alias-label-tertiary: #8991a1;
+      --dsw-alias-state-business-primary: #475be8;
+      --dsw-alias-state-success-primary: #1b9a62;
+      --dsw-alias-state-error-primary: #d64949;
+      --dsw-alias-interactive-bg-hover: #f0f2f6;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      background: var(--dsw-alias-bg-layer-1);
+      color: var(--dsw-alias-label-primary);
+      font-family: Inter, "Segoe UI", "Microsoft YaHei", sans-serif;
+    }
+    .preview { width: 820px; margin: 42px auto; }
+    h2 { margin: 0 0 8px; font-size: 20px; }
+    .body { margin: 0 0 16px; color: var(--dsw-alias-label-tertiary); font-size: 12px; line-height: 18px; }
+    .cards { display: grid; grid-template-columns: repeat(2,minmax(0,1fr)); gap: 10px; margin: 0; padding: 0; list-style: none; }
+    .card { display: flex; flex-direction: column; gap: 6px; min-width: 0; min-height: 180px; padding: 12px 14px; border: 1px solid var(--dsw-alias-border-l2); border-radius: 10px; background: var(--dsw-alias-bg-layer-3); }
+    .head { display: flex; align-items: baseline; gap: 8px; min-width: 0; }
+    .name { flex: 1; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; font-size: 13px; font-weight: 600; line-height: 20px; }
+    .state { flex: none; margin-left: auto; font-size: 12px; line-height: 18px; color: var(--dsw-alias-state-success-primary); }
+    .meta { margin: 0; font-size: 12px; line-height: 18px; color: var(--dsw-alias-label-tertiary); }
+    .repo-icon { display: inline-flex; margin-left: 5px; vertical-align: -2px; color: inherit; }
+    .repo-icon svg { width: 14px; height: 14px; }
+    .desc { display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; margin: 0; font-size: 13px; line-height: 19px; color: var(--dsw-alias-label-secondary); }
+    .foot { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: auto; padding-top: 2px; }
+    button { flex: none; padding: 4px 12px; border-radius: 999px; font: inherit; font-size: 12px; line-height: 18px; cursor: pointer; }
+    .update { border: 1px solid var(--dsw-alias-label-primary); background: var(--dsw-alias-label-primary); color: var(--dsw-alias-bg-layer-1); }
+    .ghost { border: 1px solid var(--dsw-alias-border-l2); background: transparent; color: var(--dsw-alias-label-secondary); }
+    .danger { border: 1px solid var(--dsw-alias-state-error-primary); background: transparent; color: var(--dsw-alias-state-error-primary); }
+    .annotation { display: flex; align-items: center; gap: 8px; margin: 18px 0 0; color: var(--dsw-alias-state-business-primary); font-size: 12px; }
+    .annotation::before { content: ""; width: 28px; height: 1px; background: currentColor; }
+  </style>
+</head>
+<body>
+  <main class="preview">
+    <h2>已安装插件</h2>
+    <p class="body">当前 profile 用包装上的插件。停用立即生效；卸载会先停用，再删掉包和它的依赖。</p>
+    <ul class="cards">
+      <li class="card">
+        <div class="head"><span class="name">dsh-desktop-safe-market</span><span class="state">已启用</span></div>
+        <p class="meta">本插件 · 由桌面客户端接入 · v0.2.15<a class="repo-icon" href="#" aria-label="GitHub"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.74-1.55-2.57-.29-5.27-1.28-5.27-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.16 1.18A10.98 10.98 0 0 1 12 6.16c.98 0 1.94.13 2.86.38 2.2-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.75.11 3.04.74.8 1.19 1.82 1.19 3.08 0 4.41-2.71 5.38-5.29 5.67.42.36.79 1.06.79 2.14v3.26c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a></p>
+        <p class="desc">安全优先的 DSH 插件市场，在安装和更新前先由 Agent 审查实际产物。</p>
+        <div class="foot"><button class="update">安全更新</button><button class="danger">卸载</button></div>
+      </li>
+      <li class="card">
+        <div class="head"><span class="name">example-plugin</span><span class="state">已启用</span></div>
+        <p class="meta">v1.4.2<a class="repo-icon" href="#" aria-label="GitHub"><svg viewBox="0 0 24 24"><path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.74-1.55-2.57-.29-5.27-1.28-5.27-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.16 1.18A10.98 10.98 0 0 1 12 6.16c.98 0 1.94.13 2.86.38 2.2-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.75.11 3.04.74.8 1.19 1.82 1.19 3.08 0 4.41-2.71 5.38-5.29 5.67.42.36.79 1.06.79 2.14v3.26c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z"/></svg></a></p>
+        <p class="desc">示例社区插件。GitHub 入口现在紧跟版本号，不再占用底部按钮位置。</p>
+        <div class="foot"><button class="update">安全更新</button><button class="ghost">停用</button><button class="danger">卸载</button></div>
+      </li>
+    </ul>
+    <p class="annotation">GitHub 图标紧跟版本号；底部主操作变为“安全更新”</p>
+  </main>
+</body>
+</html>

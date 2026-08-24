@@ -34,7 +34,7 @@ import { isSafeVersion, PACKAGE_NAME } from '../shapes.ts'
 import type { MarketLocale } from './copy.ts'
 import { describeInstalled, ownedBy, ownedIndexOf, shortName } from './owned.ts'
 import {
-  INSTALLED_FILTER, SELF_CARD_KEY, SELF_MARKET_PLUGIN, matches, starCount, stateOf,
+  INSTALLED_FILTER, SELF_CARD_KEY, SELF_MARKET_PLUGIN, installedUpdateCardKey, matches, starCount, stateOf,
 } from './rows.ts'
 import { SkillsView } from './SkillsView.tsx'
 
@@ -283,15 +283,31 @@ function useInstalled({ t, active, listInstalled, setInstalledEnabled, uninstall
  * stays one grid and the eye does not have to re-learn the layout when the
  * filter changes.
  */
-function InstalledCard({ t, item, installed }: {
+function InstalledCard({ t, item, installed, snapshot, card, installBusy, readiness, onUpdate }: {
   t: MarketLocale
   item: MarketInstalledPackage
   installed: ReturnType<typeof useInstalled>
+  snapshot: SafeMarketSnapshot
+  card: CardState | undefined
+  installBusy: boolean
+  readiness: WorkspaceReadiness
+  onUpdate: (item: MarketInstalledPackage, viaNewWorkspace: boolean) => void
 }): ReactElement {
   const { busy, confirming, setConfirming, toggle, uninstall } = installed
   const uninstalling = busy === `${item.packageName}:uninstall`
   const busyRow = busy !== null && (busy === `${item.packageName}:toggle` || uninstalling)
   const confirmRow = confirming === item.packageName || uninstalling
+  const metaParts = [
+    item.self ? t('installed.self') : '',
+    item.inBox ? t('installed.inBox') : '',
+    item.unregistered ? t('installed.unregistered') : '',
+  ].filter(part => part !== '')
+  const updateNeedsWorkspace = card?.status === 'needs-workspace' || (readiness === 'none' && card === undefined)
+  const updateDisabled = busy !== null || installBusy || snapshot.profile === null
+    || item.repository === '' || item.error !== ''
+  const updateTitle = item.repository === ''
+    ? t('installed.updateUnavailable')
+    : snapshot.profile === null ? t('install.profilePending') : undefined
   const stateLabels: Record<ReturnType<typeof stateOf>, string> = {
     running: t('installed.running'),
     disabled: t('installed.disabled'),
@@ -307,12 +323,26 @@ function InstalledCard({ t, item, installed }: {
         <span className="dsh_market_installedState" data-state={stateOf(item)}>{stateLabels[stateOf(item)]}</span>
       </div>
       <p className="dsh_market_meta">
-        {[
-          item.self ? t('installed.self') : '',
-          item.inBox ? t('installed.inBox') : '',
-          item.unregistered ? t('installed.unregistered') : '',
-          item.version === '' ? '' : `v${item.version}`,
-        ].filter(part => part !== '').join(' · ')}
+        {metaParts.join(' · ')}
+        {metaParts.length > 0 && item.version !== '' ? ' · ' : ''}
+        {item.version !== '' && `v${item.version}`}
+        {/* The repository identity has already been reduced to owner/name by
+            the Host. Keep the link beside the version it describes instead
+            of spending a full action-button seat on it. */}
+        {item.repository !== '' && (
+          <a
+            className="dsh_market_repoIcon"
+            href={`https://github.com/${item.repository}`}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={`${t('repo')}: ${item.repository}`}
+            title={`${t('repo')}: ${item.repository}`}
+          >
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path fill="currentColor" d="M12 .7a11.5 11.5 0 0 0-3.64 22.41c.58.1.79-.25.79-.56v-2.23c-3.22.7-3.9-1.37-3.9-1.37-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.17.08 1.78 1.2 1.78 1.2 1.04 1.77 2.72 1.26 3.38.96.1-.75.4-1.26.74-1.55-2.57-.29-5.27-1.28-5.27-5.68 0-1.26.45-2.28 1.19-3.08-.12-.29-.52-1.46.11-3.04 0 0 .97-.31 3.16 1.18A10.98 10.98 0 0 1 12 6.16c.98 0 1.94.13 2.86.38 2.2-1.49 3.16-1.18 3.16-1.18.63 1.58.23 2.75.11 3.04.74.8 1.19 1.82 1.19 3.08 0 4.41-2.71 5.38-5.29 5.67.42.36.79 1.06.79 2.14v3.26c0 .31.21.67.8.56A11.5 11.5 0 0 0 12 .7Z" />
+            </svg>
+          </a>
+        )}
         {/* The how-and-why of a desktop seat, folded behind a hint icon: it
             matters exactly once — when someone wonders what this row is —
             and as a standing paragraph it dwarfed the card it explains.
@@ -342,6 +372,8 @@ function InstalledCard({ t, item, installed }: {
       {item.error !== '' && <p className="dsh_market_cardError">{t('installed.readFailed', { reason: item.error })}</p>}
       {item.heldDown && item.entries.length > 0
         && <p className="dsh_market_cardNotice">{t('installed.heldDown')}</p>}
+      {card?.status === 'error' && <p className="dsh_market_cardError">{card.message}</p>}
+      {card?.status === 'needs-workspace' && <p className="dsh_market_cardNotice">{card.message}</p>}
       <div className="dsh_market_foot">
         {confirmRow
           ? (
@@ -373,19 +405,19 @@ function InstalledCard({ t, item, installed }: {
             )
           : (
             <>
-              {/* The Host reduces a manifest's repository field to a checked
-                  owner/name slug. Packages without one get no link rather
-                  than a guess based on their package name. */}
-              {item.repository !== '' && (
-                <a
-                  className="dsh_market_link"
-                  href={`https://github.com/${item.repository}`}
-                  target="_blank"
-                  rel="noreferrer"
-                >
-                  {t('repo')}
-                </a>
-              )}
+              <button
+                type="button"
+                className="dsh_market_install"
+                disabled={updateDisabled}
+                title={updateTitle}
+                onClick={() => { onUpdate(item, updateNeedsWorkspace) }}
+              >
+                {card?.status === 'picking'
+                  ? t('install.picking')
+                  : card?.status === 'busy'
+                    ? t('installing')
+                    : updateNeedsWorkspace ? t('installed.pickAndUpdate') : t('installed.update')}
+              </button>
               {!item.self && !item.unregistered && (
                 <button
                   type="button"
@@ -414,9 +446,14 @@ function InstalledCard({ t, item, installed }: {
 }
 
 /** The installed set as a card grid, with its own status lines above it. */
-function InstalledCards({ t, installed }: {
+function InstalledCards({ t, installed, snapshot, cards, installBusy, readiness, onUpdate }: {
   t: MarketLocale
   installed: ReturnType<typeof useInstalled>
+  snapshot: SafeMarketSnapshot
+  cards: Readonly<Record<string, CardState>>
+  installBusy: boolean
+  readiness: WorkspaceReadiness
+  onUpdate: (item: MarketInstalledPackage, viaNewWorkspace: boolean) => void
 }): ReactElement {
   const { state, notice, actionError, reload } = installed
   return (
@@ -444,7 +481,17 @@ function InstalledCards({ t, installed }: {
       {state.status === 'ready' && state.result.packages.length > 0 && (
         <ul className="dsh_market_cards">
           {state.result.packages.map(item => (
-            <InstalledCard key={item.packageName} t={t} item={item} installed={installed} />
+            <InstalledCard
+              key={item.packageName}
+              t={t}
+              item={item}
+              installed={installed}
+              snapshot={snapshot}
+              card={cards[installedUpdateCardKey(item.packageName)]}
+              installBusy={installBusy}
+              readiness={readiness}
+              onUpdate={onUpdate}
+            />
           ))}
         </ul>
       )}
@@ -466,7 +513,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   workspaceReadiness: MarketSectionInjected['workspaceReadiness']
   cards: Readonly<Record<string, CardState>>
   installBusy: boolean
-  onInstall: (target: MarketPlugin, prompt: string, viaNewWorkspace: boolean) => void
+  onInstall: (cardKey: string, prompt: string, viaNewWorkspace: boolean) => void
 }): ReactElement {
   const enabled = snapshot.value.enabled
   const [state, setState] = useState<CatalogState>(enabled ? { status: 'loading' } : { status: 'idle' })
@@ -638,9 +685,26 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
     // this card can know — the published catalog carries repository facts,
     // not release versions — so the prompt opens by asking it to establish
     // that and to stop if the answer is no.
-    onInstall(item, owned === undefined
+    onInstall(item.fullName, owned === undefined
       ? t('prompt', common)
       : t('prompt.upgrade', { ...common, installed: describeInstalled(owned) }), viaNewWorkspace)
+  }
+
+  const runInstalledUpdate = (item: MarketInstalledPackage, viaNewWorkspace: boolean): void => {
+    const profile = snapshot.profile
+    if (profile === null || item.repository === '') return
+    // Prefer the catalog's validated default branch when this installed
+    // repository is listed. An unlisted package still has a Host-validated
+    // owner/name identity; HEAD asks git for that repository's remote default
+    // instead of guessing that every project calls it `main`.
+    const catalogItem = catalog?.items.find(entry =>
+      entry.fullName.toLocaleLowerCase() === item.repository.toLocaleLowerCase())
+    onInstall(installedUpdateCardKey(item.packageName), t('prompt.upgrade', {
+      url: `https://github.com/${item.repository}`,
+      profile,
+      branch: catalogItem?.defaultBranch ?? 'HEAD',
+      installed: describeInstalled(item),
+    }), viaNewWorkspace)
   }
 
   return (
@@ -729,7 +793,17 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
       </div>
 
       {installedSelected
-        ? <InstalledCards t={t} installed={installed} />
+        ? (
+          <InstalledCards
+            t={t}
+            installed={installed}
+            snapshot={snapshot}
+            cards={cards}
+            installBusy={installBusy}
+            readiness={readiness}
+            onUpdate={runInstalledUpdate}
+          />
+          )
         : state.status === 'error'
           ? (
             <p className="dsh_market_status" data-error="true">
@@ -888,8 +962,7 @@ export function MarketSection({
     if (mounted.current) setCards(cardsRef.current)
   }
 
-  const runInstall = (target: MarketPlugin, prompt: string, viaNewWorkspace: boolean,
-    cardKey: string = target.fullName): void => {
+  const runInstall = (cardKey: string, prompt: string, viaNewWorkspace: boolean): void => {
     if (Object.values(cardsRef.current).some(card => card.status === 'busy' || card.status === 'picking')) return
     report(cardKey, { status: viaNewWorkspace ? 'picking' : 'busy' })
     const handOff = viaNewWorkspace ? installIntoNewWorkspace : install
@@ -950,12 +1023,12 @@ export function MarketSection({
   const runSelfUpgrade = (): void => {
     const profile = snapshot.profile
     if (profile === null) return
-    runInstall(SELF_MARKET_PLUGIN, t('prompt.upgrade', {
+    runInstall(SELF_CARD_KEY, t('prompt.upgrade', {
       url: SELF_MARKET_PLUGIN.url,
       profile,
       branch: SELF_MARKET_PLUGIN.defaultBranch,
       installed: isSafeVersion(snapshot.version) ? `${PACKAGE_NAME} ${snapshot.version}` : PACKAGE_NAME,
-    }), workspaceReadiness.getSnapshot() === 'none', SELF_CARD_KEY)
+    }), workspaceReadiness.getSnapshot() === 'none')
   }
 
   return (

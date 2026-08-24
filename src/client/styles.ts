@@ -354,6 +354,20 @@ export const cssText = `
   line-height: 18px;
   color: var(--dsw-alias-label-tertiary);
 }
+.dsh_market_repoIcon {
+  display: inline-flex;
+  margin-left: 5px;
+  vertical-align: -2px;
+  color: inherit;
+}
+.dsh_market_repoIcon svg {
+  width: 14px;
+  height: 14px;
+}
+.dsh_market_repoIcon:hover,
+.dsh_market_repoIcon:focus-visible {
+  color: var(--dsw-alias-label-primary);
+}
 .dsh_market_desc {
   display: -webkit-box;
   -webkit-line-clamp: 3;

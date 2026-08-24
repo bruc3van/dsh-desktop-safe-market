@@ -92,6 +92,9 @@ export declare const zh: {
     readonly 'installed.disabled': "已停用";
     readonly 'installed.failedState': "加载失败";
     readonly 'installed.readFailedState': "无法读取";
+    readonly 'installed.update': "安全更新";
+    readonly 'installed.pickAndUpdate': "选择文件夹并更新";
+    readonly 'installed.updateUnavailable': "该插件没有可验证的 GitHub 仓库信息，无法发起安全更新。";
     readonly 'installed.enable': "启用";
     readonly 'installed.enabling': "启用中…";
     readonly 'installed.disable': "停用";

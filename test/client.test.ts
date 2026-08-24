@@ -18,6 +18,7 @@ import {
   INSTALLED_FILTER,
   SELF_CARD_KEY,
   SELF_MARKET_PLUGIN,
+  installedUpdateCardKey,
   matches,
   matchesSkill,
   starCount,
@@ -262,6 +263,8 @@ test('the reserved filter keys cannot collide with a catalog key', () => {
   // The header's self-upgrade must not share a card seat with the catalog row
   // for this same repository, which the shortlist may well carry.
   assert.notEqual(SELF_CARD_KEY as string, SELF_MARKET_PLUGIN.fullName)
+  assert.ok(!REPOSITORY_SLUG_PATTERN.test(installedUpdateCardKey('@scope/demo')))
+  assert.notEqual(installedUpdateCardKey('demo'), installedUpdateCardKey('@scope/demo'))
 })
 
 test('the market own row satisfies the same wire contract a catalog row does', () => {

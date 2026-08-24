@@ -28,6 +28,11 @@ export const INSTALLED_FILTER = 'dsh:installed'
  */
 export const SELF_CARD_KEY = 'dsh:self'
 
+/** Card-state key for an update launched from the installed-package view. */
+export function installedUpdateCardKey(packageName: string): string {
+  return `dsh:update:${packageName}`
+}
+
 /**
  * The market's own fixed repository identity. Unlike catalog rows this is
  * package-owned source, not remote snapshot text; keeping the complete
