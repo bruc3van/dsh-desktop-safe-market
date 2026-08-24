@@ -76,3 +76,19 @@ test('release workflow publishes to npm via Trusted Publishing', async () => {
     'release.yml must grant `id-token: write` for npm Trusted Publishing (OIDC)',
   )
 })
+
+test('workflows use the Node 24-compatible pnpm setup action', async () => {
+  for (const name of ['check.yml', 'release.yml'] as const) {
+    const yaml = await readFile(resolve(root, '.github/workflows', name), 'utf8')
+    assert.match(
+      yaml,
+      /uses:\s*pnpm\/action-setup@v6/,
+      `${name} must use pnpm/action-setup@v6 so GitHub Actions does not run the deprecated Node 20 action runtime`,
+    )
+    assert.doesNotMatch(
+      yaml,
+      /uses:\s*pnpm\/action-setup@v[1-5](?:\s|$)/,
+      `${name} must not use a pnpm/action-setup release backed by the deprecated Node 20 action runtime`,
+    )
+  }
+})
