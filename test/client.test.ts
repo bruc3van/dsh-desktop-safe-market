@@ -12,6 +12,7 @@
  */
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { en, zh, type SafeMarketLocaleKey } from '../src/client/locales.ts'
 import { adoptStyles, cssText, STYLE_ID } from '../src/client/styles.ts'
 import {
@@ -29,6 +30,27 @@ import { marketPluginSchema, type MarketInstalledPackage, type MarketPlugin } fr
 import { isSafeBranchName, isSafeVersion, REPOSITORY_SLUG_PATTERN } from '../src/shapes.ts'
 
 // ——— the prompt interpolation invariant ———
+
+test('the browser bundle requests only module-table platform seeds', async () => {
+  const bundle = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+  const requests = [...new Set(
+    [...bundle.matchAll(/require\("([^"]+)"\)/g)].map(match => match[1]),
+  )].sort()
+  assert.deepEqual(requests, ['react', 'react/jsx-runtime'])
+  assert.ok(!bundle.includes('@deepseek-ai/dsh-client-runtime/client'))
+})
+
+test('the client manifest names only dependencies shared by old and new DSH', async () => {
+  const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
+    dsh: { client: { inject: string[] } }
+  }
+  assert.deepEqual(manifest.dsh.client.inject, [
+    '@deepseek-ai/dsh-api-remotes',
+    '@deepseek-ai/dsh-client-ui-settings',
+    '@deepseek-ai/dsh-client-ui-conversation',
+    '@deepseek-ai/dsh-client-locale',
+  ])
+})
 
 /** Every `{placeholder}` a dictionary value carries, deduplicated and sorted. */
 const placeholders = (value: string): string[] => [...new Set(value.match(/\{[^}\s]*\}/g) ?? [])].sort()

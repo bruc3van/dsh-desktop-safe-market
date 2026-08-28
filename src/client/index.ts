@@ -12,10 +12,8 @@
 // Type-only: the ctx.remote merge and the forwarded Host-event face.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
 import {
-  createSnapshotStore,
   type ClientContext,
   type ISessions,
-  type IWorkspaces,
 } from '@deepseek-ai/dsh-client-runtime/client'
 // Type-only: the ctx.locale Context merge.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
@@ -42,6 +40,14 @@ import { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 import { en, zh, type SafeMarketLocaleKey } from './locales.ts'
 import { adoptNavIcon } from './navIcon.ts'
 import { adoptStyles } from './styles.ts'
+import {
+  type MarketUiWorkspace,
+  type MarketWorkspaces,
+  type WorkspaceTarget,
+  workspaceNavigation,
+  workspaceReady,
+  workspaceTargetOf,
+} from './workspaceCompat.ts'
 
 export type {
   ChooseWorkspaceOutcome,
@@ -72,8 +78,27 @@ const SCOPE_POLL_MS = 60
 /** How long a freshly registered workspace gets to reach the list mirror. */
 const WORKSPACE_WAIT_MS = 4_000
 
-/** The workspace identity the domain's own projections speak in. */
-type WorkspaceTarget = NonNullable<ReturnType<IWorkspaces['list']['getSnapshot']>['recentWorkspaceId']>
+/** A dependency-free root store; its identity and snapshots stay stable between writes. */
+function createMarketStore<T>(initial: T): {
+  getSnapshot(): T
+  subscribe(listener: () => void): () => void
+  set(next: T): void
+} {
+  let value = initial
+  const listeners = new Set<() => void>()
+  return {
+    getSnapshot: () => value,
+    subscribe: (listener) => {
+      listeners.add(listener)
+      return () => { listeners.delete(listener) }
+    },
+    set: (next) => {
+      if (Object.is(value, next)) return
+      value = next
+      for (const listener of [...listeners]) listener()
+    },
+  }
+}
 
 /** The mounted safeMarket namespace service's callable face. */
 interface SafeMarketFace {
@@ -104,8 +129,15 @@ export function apply(ctx: ClientContext): void {
   // gear); re-skin this section's row with the market's own storefront.
   ctx.effect(() => adoptNavIcon(), 'dsh-desktop-safe-market: nav icon')
 
-  const scope = createSnapshotStore({ value: defaultSettings(), profile: null as string | null, version: '' })
+  const scope = createMarketStore({ value: defaultSettings(), profile: null as string | null, version: '' })
   let settingsGeneration = 0
+
+  const workspaces = ctx.get('workspaces') as unknown as MarketWorkspaces
+  const sessions = ctx.get('sessions') as unknown as ISessions
+  const navigation = workspaceNavigation(
+    workspaces,
+    () => (ctx as unknown as { get(name: string): unknown }).get('uiWorkspace') as MarketUiWorkspace | undefined,
+  )
 
   const reportError = (operation: string, error: unknown): void => {
     console.error(`[dsh-desktop-safe-market] ${operation} failed:`, error)
@@ -263,20 +295,19 @@ export function apply(ctx: ClientContext): void {
    * service face; nothing here reads the DOM, and nothing here sends.
    */
   const stageIn = async (workspaceId: WorkspaceTarget, prompt: string): Promise<InstallOutcome> => {
-    const workspaces = ctx.get('workspaces') as IWorkspaces
-    const sessions = ctx.get('sessions') as unknown as ISessions
     const conversation = ctx.get('conversation') as IConversation
     try {
-      const sessionId = await workspaces.connectWorkspace(workspaceId)
-      sessions.open(sessionId)
+      const sessionId = await navigation.connectWorkspace(workspaceId)
+      const typedSessionId = sessionId as Parameters<ISessions['open']>[0]
+      sessions.open(typedSessionId)
       // The session's client scope appears when the session mounts, which is
       // a render away from the open above — so the draft waits for its seat
       // rather than being written into nothing.
       const deadline = Date.now() + SCOPE_WAIT_MS
-      let actx = sessions.scope(sessionId)
+      let actx = sessions.scope(typedSessionId)
       while (actx === undefined && Date.now() < deadline) {
         await wait(SCOPE_POLL_MS)
-        actx = sessions.scope(sessionId)
+        actx = sessions.scope(typedSessionId)
       }
       if (actx === undefined) {
         return { ok: false, reason: 'failed', message: 'the new session did not open' }
@@ -301,9 +332,8 @@ export function apply(ctx: ClientContext): void {
     | { ok: false; reason: 'cancelled' }
     | { ok: false; reason: 'failed'; message: string }
   > => {
-    const workspaces = ctx.get('workspaces') as IWorkspaces
     try {
-      const path = await workspaces.pickDirectory()
+      const path = await navigation.pickDirectory()
       // A cancelled picker is an answer, not a failure: the user changed
       // their mind, and the card says so instead of showing an error.
       if (path === null) return { ok: false, reason: 'cancelled' }
@@ -325,20 +355,17 @@ export function apply(ctx: ClientContext): void {
    * The install hand-off: resolve the workspace, then stage the prompt in it.
    */
   const install = async (prompt: string): Promise<InstallOutcome> => {
-    const workspaces = ctx.get('workspaces') as IWorkspaces
-    const sessions = ctx.get('sessions') as unknown as ISessions
-
     // The same target rule the shell's own New Session action uses: the
     // current session's workspace, then the recency projection. Both derive
     // from the two-baseline readiness flag — in the first moments of boot
     // `items` is still empty and "no workspace yet" would be a wrong answer.
     const workspaceState = workspaces.list.getSnapshot()
-    if (!workspaceState.baselinesReady) return { ok: false, reason: 'not-ready' }
-    const current = sessions.list.getSnapshot().current
-    const currentWorkspaceId = current === undefined
-      ? undefined
-      : workspaceState.items.find(item => item.sessionIds.includes(current))?.workspaceId
-    const workspaceId = currentWorkspaceId ?? workspaceState.recentWorkspaceId
+    const sessionState = sessions.list.getSnapshot()
+    if (!workspaceReady(workspaceState, sessionState)) return { ok: false, reason: 'not-ready' }
+    const workspaceId = workspaceTargetOf(
+      workspaceState,
+      sessionState as unknown as Parameters<typeof workspaceTargetOf>[1],
+    )
     if (workspaceId === undefined) return { ok: false, reason: 'no-workspace' }
     return await stageIn(workspaceId, prompt)
   }
@@ -363,11 +390,18 @@ export function apply(ctx: ClientContext): void {
    */
   const workspaceReadiness = {
     getSnapshot: (): WorkspaceReadiness => {
-      const state = (ctx.get('workspaces') as IWorkspaces).list.getSnapshot()
-      if (!state.baselinesReady) return 'pending'
+      const state = workspaces.list.getSnapshot()
+      if (!workspaceReady(state, sessions.list.getSnapshot())) return 'pending'
       return state.items.length > 0 ? 'present' : 'none'
     },
-    subscribe: (fn: () => void): (() => void) => (ctx.get('workspaces') as IWorkspaces).list.subscribe(fn),
+    subscribe: (fn: () => void): (() => void) => {
+      const disposeWorkspaces = workspaces.list.subscribe(fn)
+      const disposeSessions = sessions.list.subscribe(fn)
+      return () => {
+        disposeSessions()
+        disposeWorkspaces()
+      }
+    },
   }
 
   const t = ctx.locale.bind(NS)
