@@ -8,13 +8,13 @@
  * runtime it was never built against, with no desktop client present to
  * withdraw it.
  *
- * Three of the body's imports are evaluated at import time and throw when
- * absent: `settingsNamespace(...)`, `defineDomain(...)`, and the
- * `TypertRemoteService` a class extends. A throw during import fails the
+ * Two of the body's imports are evaluated at import time and throw when
+ * absent: `defineDomain(...)` and the `TypertRemoteService` a class extends.
+ * A throw during import fails the
  * WHOLE plugin tree — the deployment's own plugins and any CLI sharing the
  * profile go down with the market. So `lib/index.js` must reach the body
  * through a runtime `import()` inside a guard, and must not touch any of the
- * three itself.
+ * two itself.
  *
  * These tests read the BUILT artifacts, because the property belongs to the
  * artifacts: a bundler setting that inlines the body would satisfy every
@@ -36,7 +36,7 @@ const entryFile = join(root, 'lib', 'index.js')
 const DEFAULT_CATALOG_BASE = 'https://raw.githubusercontent.com/bruc3van/awesome-dsh-plugin/main/data'
 
 /** The symbols whose evaluation at import time is what the split defers. */
-const DEFERRED = ['TypertRemoteService', 'defineDomain', 'settingsNamespace'] as const
+const DEFERRED = ['TypertRemoteService', 'defineDomain'] as const
 
 test('the built entry never reaches the imports that can throw on a foreign runtime', async () => {
   const entry = await readFile(entryFile, 'utf8')
@@ -63,7 +63,7 @@ test('the body keeps the deferred imports (the split is not merely cosmetic)', a
 
 test('a runtime that cannot load the body loses the market and nothing else', async () => {
   // The entry alone, with no sibling body to import: the same shape a runtime
-  // missing one of the three modules presents — the dynamic import rejects.
+  // missing one of the required modules presents — the dynamic import rejects.
   const dir = await mkdtemp(join(tmpdir(), 'safe-market-entry-'))
   try {
     await copyFile(entryFile, join(dir, 'index.js'))

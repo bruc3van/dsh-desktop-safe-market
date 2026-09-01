@@ -39,7 +39,7 @@ dsh plugin --profile web add dsh-desktop-safe-market
 要锁到当前文档对应的那一版，用 GitHub release tarball：
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.3.0.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.4.0.tar.gz
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -48,7 +48,9 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 
 ### DSH 版本兼容
 
-0.3.0 同时兼容旧版单体 Client Runtime 与新版拆分后的 Session/Workspace Controller。客户端包不再请求只存在于某一代 DSH 的运行时模块；工作区连接和目录选择在新版优先走 `uiWorkspace`，旧版则回退到 `workspaces` 原有方法。
+新版 Safe Market **仅支持 DSH 0.1.2 系列**，最低要求为 **`0.1.2-alpha.3`**。它直接使用拆分后的 Session/Workspace Controller、`uiWorkspace` 与新版 Settings Provider API。
+
+这是有意的兼容性取舍：新版 **不兼容 DSH 0.1.1 系列**，也不再包含旧版单体 `dsh-client-runtime` 的回退路径。仍在使用 0.1.1 的环境请保留 `dsh-desktop-safe-market@0.3.0`；升级 Safe Market 前请先将 DSH 升级到 0.1.2-alpha.3 或更高的 0.1.2 版本。
 
 ## 首次使用要手动开启
 

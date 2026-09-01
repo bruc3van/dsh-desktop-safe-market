@@ -37,18 +37,22 @@ test('the browser bundle requests only module-table platform seeds', async () =>
     [...bundle.matchAll(/require\("([^"]+)"\)/g)].map(match => match[1]),
   )].sort()
   assert.deepEqual(requests, ['react', 'react/jsx-runtime'])
-  assert.ok(!bundle.includes('@deepseek-ai/dsh-client-runtime/client'))
+  assert.ok(!bundle.includes('dsh-client-runtime'))
 })
 
-test('the client manifest names only dependencies shared by old and new DSH', async () => {
+test('the client manifest names its DSH 0.1.2 Controller and UI dependencies', async () => {
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
     dsh: { client: { inject: string[] } }
   }
   assert.deepEqual(manifest.dsh.client.inject, [
     '@deepseek-ai/dsh-api-remotes',
-    '@deepseek-ai/dsh-client-ui-settings',
-    '@deepseek-ai/dsh-client-ui-conversation',
+    '@deepseek-ai/dsh-api-session-controller',
+    '@deepseek-ai/dsh-api-workspace-controller',
     '@deepseek-ai/dsh-client-locale',
+    '@deepseek-ai/dsh-client-ui-conversation',
+    '@deepseek-ai/dsh-client-ui-renderer',
+    '@deepseek-ai/dsh-client-ui-settings',
+    '@deepseek-ai/dsh-client-ui-workspace',
   ])
 })
 

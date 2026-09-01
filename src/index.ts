@@ -10,9 +10,9 @@
  * npx-cached one. It also means the market can meet a runtime it was never
  * built against, with no client present to withdraw it.
  *
- * Three of its imports are evaluated at import time and would throw on a
- * runtime missing them: `settingsNamespace(...)`, `defineDomain(...)`, and
- * the `TypertRemoteService` base class. A throw during import does not fail
+ * Two of its imports are evaluated at import time and would throw on an
+ * unsupported runtime: `defineDomain(...)` and the `TypertRemoteService`
+ * base class. A throw during import does not fail
  * just this plugin — it fails the WHOLE plugin tree, so the deployment's own
  * plugins die with the market, and so does any CLI sharing the profile.
  *
@@ -112,8 +112,8 @@ export function apply(ctx: Context, config?: Config): void {
     // Two guards, because the two phases fail for unrelated reasons and the
     // difference is the whole diagnostic value of this file. Importing the
     // body is where an unfamiliar runtime announces itself: the module's own
-    // evaluation is what resolves `settingsNamespace`, `defineDomain` and
-    // `TypertRemoteService`, so a missing module, a missing named export and
+    // evaluation is what resolves `defineDomain` and `TypertRemoteService`,
+    // so a missing module, a missing named export and
     // a "not a function" all land here. Running the body is ordinary plugin
     // work, and a throw from it is this market's bug.
     let body: { applyMarket: (ctx: Context, config: Config) => () => void }

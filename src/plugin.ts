@@ -10,10 +10,9 @@
  * naming the official install command — to a session the user then confirms.
  *
  * DELIBERATELY NOT THE PACKAGE ENTRY. Everything that can fail to resolve on
- * an unfamiliar runtime is reached from here and from nowhere else: three
- * `@deepseek-ai/*` modules are evaluated the moment this file is imported —
- * `settingsNamespace(...)`, `defineDomain(...)`, and the `TypertRemoteService`
- * a class extends — and any of them missing throws during import. A throw at
+ * an unfamiliar runtime is reached from here and from nowhere else: the
+ * `defineDomain(...)` helper and the `TypertRemoteService` base class are
+ * evaluated the moment this file is imported, and either missing throws. A throw at
  * import time fails the WHOLE plugin tree, taking the deployment's own
  * plugins and any CLI sharing the profile down with the market. So `index.ts`
  * imports this file dynamically, inside a guard: an incompatible runtime

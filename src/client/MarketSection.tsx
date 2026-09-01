@@ -21,7 +21,7 @@ import {
   type KeyboardEvent as ReactKeyboardEvent, type ReactElement,
 } from 'react'
 import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
-import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-runtime/client'
+import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type {
   MarketCatalog,
   MarketInstalledPackage,

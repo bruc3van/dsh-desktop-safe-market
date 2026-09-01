@@ -39,7 +39,7 @@ Install DSH Safe Market for me: run the official command `dsh plugin --profile w
 To pin the version this document names, use the GitHub release tarball:
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.3.0.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.4.0.tar.gz
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -48,7 +48,9 @@ The browser, the CLI, and the desktop client share one profile, so the entry app
 
 ### DSH version compatibility
 
-Version 0.3.0 supports both the legacy monolithic Client Runtime and the newer split Session/Workspace Controllers. Its browser bundle no longer requests a runtime module that exists in only one DSH generation; Workspace connection and directory picking prefer `uiWorkspace` on new DSH and fall back to the original `workspaces` methods on old DSH.
+New Safe Market releases **support DSH 0.1.2 only**, with **`0.1.2-alpha.3`** as the minimum version. They directly use the split Session/Workspace Controllers, `uiWorkspace`, and the new Settings Provider API.
+
+This is an intentional compatibility trade-off: new releases **do not support the DSH 0.1.1 line** and no longer include a fallback to the monolithic `dsh-client-runtime`. Environments that remain on 0.1.1 should keep `dsh-desktop-safe-market@0.3.0`; upgrade DSH to 0.1.2-alpha.3 or a later 0.1.2 release before upgrading Safe Market.
 
 ## You turn it on yourself
 

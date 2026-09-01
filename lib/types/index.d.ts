@@ -10,9 +10,9 @@
  * npx-cached one. It also means the market can meet a runtime it was never
  * built against, with no client present to withdraw it.
  *
- * Three of its imports are evaluated at import time and would throw on a
- * runtime missing them: `settingsNamespace(...)`, `defineDomain(...)`, and
- * the `TypertRemoteService` base class. A throw during import does not fail
+ * Two of its imports are evaluated at import time and would throw on an
+ * unsupported runtime: `defineDomain(...)` and the `TypertRemoteService`
+ * base class. A throw during import does not fail
  * just this plugin — it fails the WHOLE plugin tree, so the deployment's own
  * plugins die with the market, and so does any CLI sharing the profile.
  *

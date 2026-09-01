@@ -61,6 +61,17 @@ for (const name of ['README.md', 'README_EN.md'] as const) {
       )
     }
   })
+
+  test(`${name} states the intentional DSH 0.1.2-only compatibility boundary`, async () => {
+    const markdown = await readFile(resolve(root, name), 'utf8')
+    assert.match(markdown, /0\.1\.2-alpha\.3/)
+    assert.match(markdown, /0\.1\.1/)
+    assert.match(
+      markdown,
+      name === 'README.md' ? /不兼容 DSH 0\.1\.1/ : /do not support the DSH 0\.1\.1/,
+      `${name} must say plainly that new releases do not support DSH 0.1.1`,
+    )
+  })
 }
 
 test('release workflow publishes to npm via Trusted Publishing', async () => {

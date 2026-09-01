@@ -1,4 +1,4 @@
-import { type ClientContext } from '@deepseek-ai/dsh-client-runtime/client';
+import type { Context as ClientContext } from '@deepseek-ai/cordis';
 import { type SafeMarketLocaleKey } from './locales.ts';
 export type { ChooseWorkspaceOutcome, InstallOutcome, MarketSectionInjected, MarketSectionProps, WorkspaceReadiness, } from './MarketSection.tsx';
 export type { SafeMarketLocaleKey } from './locales.ts';
@@ -11,7 +11,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 /** Dictionary namespace owned by this plugin. */
 export declare const NS = "settings.safeMarket";
-/** Required services: settings seat, locale, the Remote face, and the session/composer domains. */
+/** Required 0.1.2 services: locale, Remote, split Controllers, navigation, and conversation. */
 export declare const inject: string[];
 /**
  * Compose the marketplace surface.

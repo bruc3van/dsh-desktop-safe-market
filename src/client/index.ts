@@ -11,12 +11,12 @@
  */
 // Type-only: the ctx.remote merge and the forwarded Host-event face.
 import type {} from '@deepseek-ai/dsh-api-remotes/client'
-import {
-  type ClientContext,
-  type ISessions,
-} from '@deepseek-ai/dsh-client-runtime/client'
+import type { ISessions } from '@deepseek-ai/dsh-api-session-controller/client'
+import type { Context as ClientContext } from '@deepseek-ai/cordis'
 // Type-only: the ctx.locale Context merge.
 import type {} from '@deepseek-ai/dsh-client-locale/client'
+// Type-only: pulls the SlotRegistry service merge (ctx.slots).
+import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
 // Type-only: brings the settings SlotMap declarations (settings.plugins.tab) in.
 import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { IConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
@@ -44,7 +44,6 @@ import {
   type MarketUiWorkspace,
   type MarketWorkspaces,
   type WorkspaceTarget,
-  workspaceNavigation,
   workspaceReady,
   workspaceTargetOf,
 } from './workspaceCompat.ts'
@@ -69,8 +68,8 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'settings.safeMarket'
 
-/** Required services: settings seat, locale, the Remote face, and the session/composer domains. */
-export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'conversation']
+/** Required 0.1.2 services: locale, Remote, split Controllers, navigation, and conversation. */
+export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'uiWorkspace', 'conversation']
 
 /** How long the hand-off waits for a freshly opened session to own a client scope. */
 const SCOPE_WAIT_MS = 4_000
@@ -134,10 +133,7 @@ export function apply(ctx: ClientContext): void {
 
   const workspaces = ctx.get('workspaces') as unknown as MarketWorkspaces
   const sessions = ctx.get('sessions') as unknown as ISessions
-  const navigation = workspaceNavigation(
-    workspaces,
-    () => (ctx as unknown as { get(name: string): unknown }).get('uiWorkspace') as MarketUiWorkspace | undefined,
-  )
+  const navigation = ctx.get('uiWorkspace') as unknown as MarketUiWorkspace
 
   const reportError = (operation: string, error: unknown): void => {
     console.error(`[dsh-desktop-safe-market] ${operation} failed:`, error)

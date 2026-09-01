@@ -6,10 +6,10 @@
  */
 import type { Context } from '@deepseek-ai/cordis';
 import z from '@deepseek-ai/schemastery';
-import { type SettingsScope } from '@deepseek-ai/dsh-settings';
+import type { SettingsScope } from '@deepseek-ai/dsh-settings';
 import type { SafeMarketSettings } from './contract.ts';
-/** The branded namespace name. */
-export declare const SAFE_MARKET_NAMESPACE: import("@deepseek-ai/dsh-settings").SettingsNamespace;
+/** Namespace validated by the DSH 0.1.2 settings provider at registration. */
+export declare const SAFE_MARKET_NAMESPACE = "safe-market";
 /**
  * Schemastery schema of the `safe-market` namespace section.
  *
