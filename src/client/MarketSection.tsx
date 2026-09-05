@@ -1,3 +1,4 @@
+import { DEFAULT_REVIEW_MODE, reviewPromptKey, type ReviewMode } from './reviewMode.ts'
 import type { SkillsSessionSource } from './skillsSubscription.ts'
 /**
  * The Marketplace settings section: its own entry in the Settings navigation,
@@ -502,9 +503,10 @@ function InstalledCards({ t, installed, snapshot, cards, installBusy, readiness,
 }
 
 /** The Plugins page. */
-function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstalled, setInstalledEnabled, uninstallInstalled, chooseWorkspace, workspaceReadiness, cards, installBusy, onInstall }: {
+function PluginsPage({ t, english, reviewMode, snapshot, setEnabled, loadCatalog, listInstalled, setInstalledEnabled, uninstallInstalled, chooseWorkspace, workspaceReadiness, cards, installBusy, onInstall }: {
   t: MarketLocale
   english: boolean
+  reviewMode: ReviewMode
   snapshot: SafeMarketSnapshot
   setEnabled: MarketSectionInjected['setEnabled']
   loadCatalog: MarketSectionInjected['loadCatalog']
@@ -688,8 +690,8 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
     // not release versions — so the prompt opens by asking it to establish
     // that and to stop if the answer is no.
     onInstall(item.fullName, owned === undefined
-      ? t('prompt', common)
-      : t('prompt.upgrade', { ...common, installed: describeInstalled(owned) }), viaNewWorkspace)
+      ? t(reviewPromptKey(reviewMode, false), common)
+      : t(reviewPromptKey(reviewMode, true), { ...common, installed: describeInstalled(owned) }), viaNewWorkspace)
   }
 
   const runInstalledUpdate = (item: MarketInstalledPackage, viaNewWorkspace: boolean): void => {
@@ -701,7 +703,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
     // instead of guessing that every project calls it `main`.
     const catalogItem = catalog?.items.find(entry =>
       entry.fullName.toLocaleLowerCase() === item.repository.toLocaleLowerCase())
-    onInstall(installedUpdateCardKey(item.packageName), t('prompt.upgrade', {
+    onInstall(installedUpdateCardKey(item.packageName), t(reviewPromptKey(reviewMode, true), {
       url: `https://github.com/${item.repository}`,
       profile,
       branch: catalogItem?.defaultBranch ?? 'HEAD',
@@ -940,6 +942,7 @@ export function MarketSection({
   // prompt follow the same setting the rest of the copy does.
   const english = t('lang') === 'en'
   const [page, setPage] = useState<Page>('plugins')
+  const [reviewMode, setReviewMode] = useState<ReviewMode>(DEFAULT_REVIEW_MODE)
   const [cards, setCards] = useState<Readonly<Record<string, CardState>>>({})
   const tabsId = useId()
   // Mirror of the card states for same-tick guards (the rendered copy lags a
@@ -1025,7 +1028,7 @@ export function MarketSection({
   const runSelfUpgrade = (): void => {
     const profile = snapshot.profile
     if (profile === null) return
-    runInstall(SELF_CARD_KEY, t('prompt.upgrade', {
+    runInstall(SELF_CARD_KEY, t(reviewPromptKey(reviewMode, true), {
       url: SELF_MARKET_PLUGIN.url,
       profile,
       branch: SELF_MARKET_PLUGIN.defaultBranch,
@@ -1063,6 +1066,26 @@ export function MarketSection({
           {selfUpgrade.message}
         </p>
       )}
+      <div className="dsh_market_review">
+        <div className="dsh_market_reviewText">
+          <label className="dsh_market_reviewTitle" htmlFor={`${tabsId}-review-mode`}>{t('review.label')}</label>
+          <div id={`${tabsId}-review-hint`} className="dsh_market_reviewDescription">
+            {t(reviewMode === 'full' ? 'review.fullHint' : 'review.compactHint')}
+          </div>
+          {snapshot.profile !== null && <div className="dsh_market_reviewDescription">{t('review.profile', { profile: snapshot.profile })}</div>}
+        </div>
+        <div className="dsh_market_reviewSelector">
+          <select id={`${tabsId}-review-mode`} aria-describedby={`${tabsId}-review-hint`}
+            className="dsh_market_reviewSelect" value={reviewMode} disabled={installBusy}
+            onChange={event => setReviewMode(event.target.value === 'full' ? 'full' : 'compact')}>
+            <option value="compact">{t('review.compact')}</option>
+            <option value="full">{t('review.full')}</option>
+          </select>
+          <svg className="dsh_market_reviewChevron" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+            <path d="m3 5 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </div>
+      </div>
       <div className="dsh_market_tabs" role="tablist" aria-label={t('tabs.aria')}>
         {pages.map((entry, index) => (
           <button
@@ -1095,6 +1118,7 @@ export function MarketSection({
         <PluginsPage
           t={t}
           english={english}
+          reviewMode={reviewMode}
           snapshot={snapshot}
           setEnabled={setEnabled}
           loadCatalog={loadCatalog}

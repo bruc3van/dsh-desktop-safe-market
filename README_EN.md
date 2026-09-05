@@ -1,6 +1,8 @@
 # dsh-desktop-safe-market
 
-**A deep scan in 5 minutes — use with confidence every day.**
+**Review first, then install.**
+
+The market header switches between Full review and Compact review for installs, plugin upgrades, and market upgrades. Reopening Settings defaults to Compact review. Compact review focuses on entry points and sensitive operations, expanding on findings while retaining version pinning, integrity checks, and install gates. The Host supplies the target profile for automatic prompt filling from the plugin configuration (`profile`, default `web`); custom deployments must configure it correctly.
 
 [中文](./README.md) | English
 
@@ -39,7 +41,7 @@ Install DSH Safe Market for me: run the official command `dsh plugin --profile w
 To pin the version this document names, use the GitHub release tarball:
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.4.1.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.4.2.tar.gz
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.

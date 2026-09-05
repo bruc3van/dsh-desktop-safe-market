@@ -71,10 +71,12 @@ const ALLOWED_IN_UPGRADE = ['{branch}', '{installed}', '{profile}', '{url}']
 for (const [language, dictionary] of [['zh', zh], ['en', en]] as const) {
   test(`the ${language} review prompt interpolates only Host-validated values`, () => {
     assert.deepEqual(placeholders(dictionary.prompt), ALLOWED_IN_PROMPT)
+    assert.deepEqual(placeholders(dictionary['prompt.compact']), ALLOWED_IN_PROMPT)
   })
 
   test(`the ${language} upgrade prompt interpolates only Host-validated values`, () => {
     assert.deepEqual(placeholders(dictionary['prompt.upgrade']), ALLOWED_IN_UPGRADE)
+    assert.deepEqual(placeholders(dictionary['prompt.compact.upgrade']), ALLOWED_IN_UPGRADE)
   })
 }
 

@@ -1,6 +1,8 @@
 # dsh-desktop-safe-market
 
-**深度扫描 5 分钟，放心使用每一天。**
+**先审查，再安装。**
+
+市场顶部可切换「完整审查 / 精简审查」，用于新装、插件升级及市场自身升级；重新打开设置时默认精简审查。精简模式优先检查入口和敏感操作，发现疑点再深入，保留版本锁定、完整性校验和安装门禁。目标 profile 由 Host 返回并自动填入提示词，来源为插件的 `profile` 配置（默认 `web`），自定义部署需正确配置。
 
 中文 | [English](./README_EN.md)
 
@@ -39,7 +41,7 @@ dsh plugin --profile web add dsh-desktop-safe-market
 要锁到当前文档对应的那一版，用 GitHub release tarball：
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.4.1.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.4.2.tar.gz
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。

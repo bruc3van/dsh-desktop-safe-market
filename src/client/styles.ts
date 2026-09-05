@@ -21,6 +21,61 @@ export const cssText = `
   max-width: 760px;
   color: var(--dsw-alias-label-primary);
 }
+.dsh_market_review {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--dsw-alias-border-l2);
+}
+.dsh_market_reviewText {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding-right: clamp(8px, 4vw, 48px);
+}
+.dsh_market_reviewTitle {
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 22px;
+  color: var(--dsw-alias-label-primary);
+}
+.dsh_market_reviewDescription {
+  font-size: 12px;
+  font-weight: 400;
+  line-height: 18px;
+  overflow-wrap: anywhere;
+  color: var(--dsw-alias-label-tertiary);
+}
+.dsh_market_reviewSelector { position: relative; flex: none; }
+.dsh_market_reviewSelect {
+  appearance: none;
+  height: 36px;
+  padding: 0 40px 0 14px;
+  border: none;
+  border-radius: 18px;
+  background: var(--dsw-alias-bg-module-platform);
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  cursor: pointer;
+}
+.dsh_market_reviewSelect:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
+.dsh_market_reviewSelect:focus-visible {
+  outline: 2px solid var(--dsw-alias-state-business-primary);
+  outline-offset: 2px;
+}
+.dsh_market_reviewSelect:disabled { cursor: default; opacity: 0.5; }
+.dsh_market_reviewChevron {
+  position: absolute;
+  right: 14px;
+  top: 11px;
+  pointer-events: none;
+  color: var(--dsw-alias-label-primary);
+}
 .dsh_market_headingRow {
   display: flex;
   align-items: baseline;

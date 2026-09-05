@@ -52,7 +52,6 @@ export function SkillsView({ t, listSkills, skillsSession }: {
     <div className="dsh_market_page">
       <div className="dsh_market_intro">
         <p className="dsh_market_introTitle">{t('skills.title')}</p>
-        <p className="dsh_market_introBody">{t('skills.body')}</p>
       </div>
 
       {result !== null && result.skills.length > 0 && (
