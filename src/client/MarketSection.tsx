@@ -1,3 +1,4 @@
+import type { SkillsSessionSource } from './skillsSubscription.ts'
 /**
  * The Marketplace settings section: its own entry in the Settings navigation,
  * with two pages of its own.
@@ -85,6 +86,7 @@ export interface MarketSectionInjected {
   loadCatalog: (force: boolean) => Promise<{ catalog: MarketCatalog | null; stale: boolean; error: string }>
   /** Read the skills this deployment resolves. */
   listSkills: () => Promise<MarketSkillsResult>
+  skillsSession: SkillsSessionSource
   /** Open a session in the current or most recent workspace and stage the given prompt. */
   install: (prompt: string) => Promise<InstallOutcome>
   /**
@@ -929,7 +931,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
 
 /** The Marketplace section. */
 export function MarketSection({
-  useScope, setEnabled, loadCatalog, listSkills, install, installIntoNewWorkspace, chooseWorkspace, workspaceReadiness,
+  useScope, setEnabled, loadCatalog, listSkills, skillsSession, install, installIntoNewWorkspace, chooseWorkspace, workspaceReadiness,
   listInstalled, setInstalledEnabled, uninstallInstalled, close, t,
 }: MarketSectionProps): ReactElement {
   const snapshot = useScope(value => value)
@@ -1112,7 +1114,7 @@ export function MarketSection({
           role="tabpanel"
           aria-labelledby={`${tabsId}-tab-skills`}
         >
-          <SkillsView t={t} listSkills={listSkills} />
+          <SkillsView t={t} listSkills={listSkills} skillsSession={skillsSession} />
         </div>
       )}
     </div>

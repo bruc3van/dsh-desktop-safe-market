@@ -89,6 +89,8 @@ export declare const DESKTOP_SEAT_MARKER = ".dsh-desktop-seat.json";
 export declare function isDesktopSeat(profileDir: string, packageName: string): boolean;
 /** The directory an in-box desktop seat occupies, for removal. */
 export declare function desktopSeatDir(profileDir: string, packageName: string): string | undefined;
+/** Keep a shared seat while another profile still resolves it. Fail closed on unreadable profiles. */
+export declare function seatHasOtherReferences(profileDir: string, packageName: string, seatDir: string): Promise<boolean>;
 /**
  * Bundle names listed in the profile that are NOT dependencies and NOT
  * shipped template layers — the in-box seats. Only those carrying the desktop

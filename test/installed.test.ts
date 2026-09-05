@@ -1172,3 +1172,67 @@ test('a failing live nudge still takes the sweep record with the disable rows', 
     await rm(home, { recursive: true, force: true })
   }
 })
+
+test('uninstall preserves a shared seat referenced by another profile', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    const name = 'shared-seat'
+    const seatDir = await makeDesktopSeat(home, name, '- insert:\n  - id: shared\n    name: shared-seat\n')
+    await listBundle(profileDir, name)
+    const other = join(home, 'profiles', 'other')
+    await mkdir(other)
+    await writeFile(join(other, 'package.json'), JSON.stringify({ dsh: { profile: { bundles: [name] } } }))
+    const manager = makeManager(home, stubLoader([]).loader)
+    await manager.uninstall(name)
+    assert.equal(existsSync(seatDir), true)
+    assert.equal((await readManifest(profileDir)).dsh?.profile?.bundles?.includes(name), false)
+    assert.equal((await readManifest(other)).dsh?.profile?.bundles?.includes(name), true)
+  } finally { await rm(home, { recursive: true, force: true }) }
+})
+
+test('failed manifest removal reports failure and keeps stop rows across sweep', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    await makeBundle(profileDir, 'demo-plugin', '- insert:\n  - id: demo\n    name: demo-plugin\n')
+    const originalManifest = await readFile(join(profileDir, 'package.json'), 'utf8')
+    const manager = makeManager(home, stubLoader([{ id: 'include:demo' }]).loader, {
+      removeDependency: async () => {
+        await rm(join(profileDir, 'package.json'))
+        await mkdir(join(profileDir, 'package.json'))
+        return { ok: false, detail: 'prune failed' }
+      },
+    })
+    await assert.rejects(manager.uninstall('demo-plugin'), /EISDIR|EPERM/)
+    await rm(join(profileDir, 'package.json'), { recursive: true })
+    await writeFile(join(profileDir, 'package.json'), originalManifest)
+    await manager.sweep()
+    assert.match(await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8'), /disabled: true/)
+    assert.equal((await readPending(home))[0]?.completed, false)
+    assert.ok((await readManifest(profileDir)).dsh?.profile?.bundles?.includes('demo-plugin'))
+  } finally { await rm(home, { recursive: true, force: true }) }
+})
+
+test('sweep finishes interrupted bookkeeping when the manifest removal already landed', async () => {
+  const { home, profileDir } = await makeHome('- id: old\n  disabled: true\n')
+  try {
+    await writePending(home, [{ packageName: 'already-removed', entryIds: ['old'], at: '', completed: false }])
+    await makeManager(home, stubLoader([]).loader).sweep()
+    assert.deepEqual(await readPending(home), [])
+    assert.doesNotMatch(await readFile(join(profileDir, 'cordis.patch.yml'), 'utf8'), /disabled/)
+  } finally { await rm(home, { recursive: true, force: true }) }
+})
+
+test('an unreadable sibling profile prevents shared seat deletion', async () => {
+  const { home, profileDir } = await makeHome()
+  try {
+    const seatDir = await makeDesktopSeat(home, 'shared-seat', '- insert:\n  - id: shared\n    name: shared-seat\n')
+    await listBundle(profileDir, 'shared-seat')
+    const other = join(home, 'profiles', 'other')
+    await mkdir(other)
+    await writeFile(join(other, 'package.json'), '{invalid')
+    const result = await makeManager(home, stubLoader([]).loader).uninstall('shared-seat')
+    assert.equal(existsSync(seatDir), true)
+    assert.match(result.notice ?? '', /seat directory:/)
+    assert.equal((await readManifest(profileDir)).dsh?.profile?.bundles?.includes('shared-seat'), false)
+  } finally { await rm(home, { recursive: true, force: true }) }
+})

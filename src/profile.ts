@@ -19,7 +19,7 @@
  */
 import { createRequire } from 'node:module'
 import { existsSync, readFileSync } from 'node:fs'
-import { readFile, rename, rm, writeFile } from 'node:fs/promises'
+import { readFile, readdir, realpath, rename, rm, writeFile } from 'node:fs/promises'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
 import { isMap, isScalar, isSeq, parse, parseDocument, type ScalarTag } from 'yaml'
@@ -204,6 +204,30 @@ export function isDesktopSeat(profileDir: string, packageName: string): boolean 
 /** The directory an in-box desktop seat occupies, for removal. */
 export function desktopSeatDir(profileDir: string, packageName: string): string | undefined {
   return isDesktopSeat(profileDir, packageName) ? packageDirFromProfile(profileDir, packageName) : undefined
+}
+
+/** Keep a shared seat while another profile still resolves it. Fail closed on unreadable profiles. */
+export async function seatHasOtherReferences(profileDir: string, packageName: string, seatDir: string): Promise<boolean> {
+  const target = await realpath(seatDir)
+  const profilesDir = resolve(profileDir, '..')
+  // Only delete copies inside this profile or the harness's shared package directory.
+  const allowed = [join(await realpath(profileDir), 'node_modules', packageName), join(await realpath(profilesDir), 'node_modules', packageName)]
+  if (!allowed.includes(target)) return true
+  for (const entry of await readdir(profilesDir, { withFileTypes: true })) {
+    if ((!entry.isDirectory() && !entry.isSymbolicLink()) || entry.name === 'node_modules') continue
+    const other = join(profilesDir, entry.name)
+    if (other === profileDir) continue
+    let manifest: ProfileManifest
+    try { manifest = await readManifest(other) } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === 'ENOENT') continue
+      throw error
+    }
+    if (!manifest.dsh?.profile?.bundles?.includes(packageName)
+      && !Object.hasOwn(manifest.dependencies ?? {}, packageName)) continue
+    const candidate = packageDirFromProfile(other, packageName)
+    if (candidate !== undefined && await realpath(candidate) === target) return true
+  }
+  return false
 }
 
 /**

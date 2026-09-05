@@ -58,6 +58,7 @@ import {
   resolveDshHome,
   resolveProfileDir,
   setEntryDisabled,
+  seatHasOtherReferences,
   unregisteredPlugins,
   userBundles,
   writeManifest,
@@ -72,6 +73,8 @@ export interface PendingUninstall {
   readonly packageName: string
   readonly entryIds: readonly string[]
   readonly at: string
+  /** False until removal from the manifest has been verified; absent in legacy records. */
+  readonly completed?: boolean
 }
 
 /** The manager's construction facts. */
@@ -163,6 +166,7 @@ async function readPendingFile(file: string): Promise<PendingUninstall[]> {
         entryIds: (Array.isArray((row as { entryIds?: unknown }).entryIds) ? (row as { entryIds: unknown[] }).entryIds : [])
           .map(id => String(id)),
         at: String((row as { at?: unknown }).at ?? ''),
+        completed: (row as { completed?: unknown }).completed !== false,
       }))
   } catch (error) {
     console.warn('[dsh-desktop-safe-market] pending-uninstall seat corrupt, treating as empty:', file, messageOf(error))
@@ -185,11 +189,18 @@ const PNPM_OUTPUT_LIMIT = 8_192
 /**
  * Run `pnpm remove <name>` in the profile directory. The package name is
  * shape-checked again here so a future caller cannot turn the spawn into a
- * shell string; Windows uses `pnpm.cmd` without `shell`, so the argv stays
- * argv. Network is not required for a remove of an already-fetched tree.
+ * shell string; Windows uses an explicit command interpreter with a validated package name. Network is not required for a remove of an already-fetched tree.
  */
+export function pnpmRemoveCommand(packageName: string, platform: NodeJS.Platform = process.platform): { command: string; args: string[] } {
+  if (!PACKAGE_NAME_PATTERN.test(packageName) || /^[.-]/.test(packageName)) throw new Error('invalid npm package name')
+  // The command text contains only a fixed verb and a validated package name.
+  return platform === 'win32'
+    ? { command: process.env.ComSpec || 'cmd.exe', args: ['/d', '/s', '/c', `pnpm.cmd remove ${packageName}`] }
+    : { command: 'pnpm', args: ['remove', packageName] }
+}
+
 export function spawnPnpmRemove(profileDir: string, packageName: string): Promise<RemoveDependencyResult> {
-  if (!PACKAGE_NAME_PATTERN.test(packageName)) {
+  if (!PACKAGE_NAME_PATTERN.test(packageName) || /^[.-]/.test(packageName)) {
     return Promise.resolve({ ok: false, detail: 'refusing to spawn pnpm with a name that is not an npm package' })
   }
   return new Promise((resolve) => {
@@ -199,8 +210,8 @@ export function spawnPnpmRemove(profileDir: string, packageName: string): Promis
       settled = true
       resolve(result)
     }
-    const command = process.platform === 'win32' ? 'pnpm.cmd' : 'pnpm'
-    const child = spawn(command, ['remove', packageName], {
+    const launch = pnpmRemoveCommand(packageName)
+    const child = spawn(launch.command, launch.args, {
       cwd: profileDir,
       env: { ...process.env, CI: process.env.CI ?? 'true' },
       windowsHide: true,
@@ -452,7 +463,7 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
       if (rowsWritten) {
         try {
           const pending = (await readPending()).filter(record => record.packageName !== packageName)
-          await writePending([...pending, { packageName, entryIds: ids, at: new Date().toISOString() }])
+          await writePending([...pending, { packageName, entryIds: ids, at: new Date().toISOString(), completed: false }])
         } catch (error) {
           faults.push('sweep record: ' + messageOf(error))
           console.warn('[dsh-desktop-safe-market] uninstall sweep record failed:', error)
@@ -472,7 +483,9 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
       await writeManifest(profileDir, manifest)
       if (seatDir !== undefined) {
         try {
-          await rm(seatDir, { recursive: true, force: true })
+          if (!await seatHasOtherReferences(profileDir, packageName, seatDir)) {
+            await rm(seatDir, { recursive: true, force: true })
+          }
         } catch (error) {
           faults.push('seat directory: ' + messageOf(error))
         }
@@ -497,12 +510,25 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
         faults.push('manifest: ' + messageOf(error))
         console.warn('[dsh-desktop-safe-market] uninstall manifest edit failed:', error)
       }
+      const verified = await readManifest(profileDir)
+      if (Object.hasOwn(verified.dependencies ?? {}, packageName) || verified.dsh?.profile?.bundles?.includes(packageName)) {
+        throw new Error(`uninstall incomplete for ${packageName}: ${faults.join('; ')}`)
+      }
       try {
         await removePackageInstallGate(profileDir, packageName)
       } catch (error) {
         faults.push('install gate: ' + messageOf(error))
         console.warn('[dsh-desktop-safe-market] uninstall install-gate cleanup failed:', error)
       }
+    }
+    try {
+      const pending = await readPending()
+      if (pending.some(record => record.packageName === packageName)) {
+        await writePending(pending.map(record =>
+          record.packageName === packageName ? { ...record, completed: true } : record))
+      }
+    } catch (error) {
+      faults.push('sweep record: ' + messageOf(error))
     }
     const result = await list()
     if (faults.length === 0) return result
@@ -524,15 +550,19 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     // The seat is a file precisely so a broken storage domain cannot strand
     // the rows; readPendingFile itself never rejects (it degrades to [] with
     // a warning), and a failed edit keeps the record for the next boot.
-    const pending = await readPending()
-    if (pending.length === 0) return
+    const all = await readPending()
+    if (all.length === 0) return
     try {
-      // The record's whole job was bridging the uninstalling session: whether
-      // the composition now lacks the entries (uninstall finished) or has
-      // them again (reinstall — the rows would wrongly keep it down), the
-      // rows come out and the record clears.
+      const manifest = await readManifest(profileDir)
+      const pending = all.filter(record => record.completed !== false
+        || (!Object.hasOwn(manifest.dependencies ?? {}, record.packageName)
+          && !manifest.dsh?.profile?.bundles?.includes(record.packageName)))
+      if (pending.length === 0) return
+      // Completed removals may release their stop rows, including after a reinstall.
+      // An interrupted removal may only release them once the manifest no longer
+      // references the package; otherwise it must stay disabled.
       await setEntryDisabled(patchPath, [...new Set(pending.flatMap(record => [...record.entryIds]))], false)
-      await writePending([])
+      await writePending(all.filter(record => !pending.includes(record)))
     } catch (error) {
       console.warn('[dsh-desktop-safe-market] uninstall sweep failed:', error)
     }
@@ -550,7 +580,7 @@ export function createInstalledManager(options: InstalledManagerOptions): Instal
     list,
     setEnabled: (packageName: string, enabled: boolean) => serialize(() => setEnabled(packageName, enabled)),
     uninstall: (packageName: string) => serialize(() => uninstall(packageName)),
-    sweep,
-    adoptPending,
+    sweep: () => serialize(sweep),
+    adoptPending: (records) => serialize(() => adoptPending(records)),
   }
 }

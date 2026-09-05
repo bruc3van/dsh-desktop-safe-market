@@ -35,11 +35,13 @@ export const zh = {
 
 读产物代码而非只看说明。先读与网络、文件系统、子进程、环境变量、安装脚本（postinstall、prepare 等）、CI、git hooks 相关的部分；纯展示层（样式、文案、图表组件）只做模式扫描，命中才逐行读。重点找：凭据/token 访问、向第三方外传数据、远程代码执行或下载后执行、无对应源码的混淆文件、权限远超声称的功能。审查期间不要运行待审查产物里任何脚本（pnpm install 会触发 prepare，直接跑构建脚本就是执行它的代码）——克隆、下载解压、读文件、grep、看提交历史和 npm/GitHub 元数据不受影响。审查产生的临时文件（克隆的仓库、解压的 tarball）由你自行删除，不要留下。
 
+npm 安装必须使用已审查的精确版本，并核对下载产物的 dist.integrity；不要重新解析 latest 或使用版本范围。
+
 发现可疑就停下说明并问我，不要擅自安装。
 
 按优先级确定安装方式（越靠前，安装时执行的该仓库代码越少），只审查将要安装的那个产物本身——装什么就扫什么：
 
-1. 该仓库发布到 npm 的包：取该包 tarball 审查其内容（npm view dist.tarball 拿 URL，下载后只解压读文件，不执行任何脚本），确认安全后再装：dsh plugin --profile {profile} add <npm 包名>
+1. 该仓库发布到 npm 的包：取该包 tarball 审查其内容（先记录精确版本及 dist.integrity，再用 npm view <包名>@<精确版本> dist.tarball 拿 URL，并校验下载内容的完整性，下载后只解压读文件，不执行任何脚本），确认安全后，保持该版本与完整性信息不变再装：dsh plugin --profile {profile} add <npm 包名>@<已审查的精确版本>
 2. 最新 release tag 的预构建 tarball：下载并审查该 tarball 的内容（只解压读文件，不执行任何脚本），确认安全后再装：dsh plugin --profile {profile} add <tarball URL>
 3. 都没有才从默认分支 {branch} 装源码：先锁定默认分支最新 commit，审查该 commit 的树，确认安全后锁到该 commit 安装：dsh plugin --profile {profile} add github:<owner>/<repo>#<commit sha>
 
@@ -59,11 +61,13 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
 
 确有新版时，与全新安装一样完整审查将要安装的新产物：先读与网络、文件系统、子进程、环境变量、安装脚本（postinstall、prepare 等）、CI、git hooks 相关的部分；纯展示层（样式、文案、图表组件）只做模式扫描，命中才逐行读。重点找：凭据/token 访问、向第三方外传数据、远程代码执行或下载后执行、无对应源码的混淆文件、权限远超声称的功能。审查期间不要运行待审查产物里任何脚本（pnpm install 会触发 prepare，直接跑构建脚本就是执行它的代码）——克隆、下载解压、读文件、grep、看提交历史和 npm/GitHub 元数据不受影响。审查产生的临时文件（克隆的仓库、解压的 tarball）由你自行删除，不要留下。
 
+npm 安装必须使用已审查的精确版本，并核对下载产物的 dist.integrity；不要重新解析 latest 或使用版本范围。
+
 发现可疑就停下说明并问我，不要擅自升级。
 
 按优先级确定升级方式（越靠前，安装时执行的该仓库代码越少），只审查将要安装的那个新产物本身——装什么就扫什么：
 
-1. npm 上的新版本：取该包 tarball 审查其内容（npm view dist.tarball 拿 URL，下载后只解压读文件，不执行任何脚本），确认安全后再装：dsh plugin --profile {profile} add <npm 包名>
+1. npm 上的新版本：取该包 tarball 审查其内容（先记录精确版本及 dist.integrity，再用 npm view <包名>@<精确版本> dist.tarball 拿 URL，并校验下载内容的完整性，下载后只解压读文件，不执行任何脚本），确认安全后，保持该版本与完整性信息不变再装：dsh plugin --profile {profile} add <npm 包名>@<已审查的精确版本>
 2. 最新 release tag 的预构建 tarball：下载并审查该 tarball 的内容（只解压读文件，不执行任何脚本），确认安全后再装：dsh plugin --profile {profile} add <tarball URL>
 3. 都没有才从默认分支 {branch} 取源码：先锁定默认分支最新 commit，审查该 commit 的树，确认安全后锁到该 commit 安装：dsh plugin --profile {profile} add github:<owner>/<repo>#<commit sha>
 
@@ -201,7 +205,9 @@ If anything looks suspicious, stop, explain, and ask me — do not install it on
 
 Pick the install method by priority (the earlier, the less of this repository's code runs at install time) and review exactly the artifact you will install — scan what you install:
 
-1. The package the repository publishes to npm: fetch the package's tarball and review its contents (npm view dist.tarball for the URL — download, extract, and read only; run no scripts), and only then install: dsh plugin --profile {profile} add <npm package name>
+Record the reviewed npm version and dist.integrity; verify the tarball bytes and install that exact version. Never re-resolve latest or use a version range.
+
+1. The package the repository publishes to npm: fetch the package's tarball and review its contents (record the exact version and dist.integrity, use npm view <package>@<exact version> dist.tarball for the URL, and verify the downloaded bytes — download, extract, and read only; run no scripts), and only then install: dsh plugin --profile {profile} add <npm package name>@<reviewed exact version>
 2. The latest release tag's prebuilt tarball: download the tarball and review its contents (extract and read only; run no scripts), and only then install: dsh plugin --profile {profile} add <tarball URL>
 3. Only if neither exists, source from the default branch {branch}: pin the branch's latest commit first, review that commit's tree, and only then install pinned to it: dsh plugin --profile {profile} add github:<owner>/<repo>#<commit sha>
 
@@ -225,7 +231,9 @@ If anything looks suspicious, stop, explain, and ask me — do not upgrade on yo
 
 Pick the upgrade method by priority (the earlier, the less of this repository's code runs at install time) and review exactly the artifact you will install — scan what you install:
 
-1. The newer version on npm: fetch the package's tarball and review its contents (npm view dist.tarball for the URL — download, extract, and read only; run no scripts), and only then install: dsh plugin --profile {profile} add <npm package name>
+Record the reviewed npm version and dist.integrity; verify the tarball bytes and install that exact version. Never re-resolve latest or use a version range.
+
+1. The newer version on npm: fetch the package's tarball and review its contents (record the exact version and dist.integrity, use npm view <package>@<exact version> dist.tarball for the URL, and verify the downloaded bytes — download, extract, and read only; run no scripts), and only then install: dsh plugin --profile {profile} add <npm package name>@<reviewed exact version>
 2. The latest release tag's prebuilt tarball: download the tarball and review its contents (extract and read only; run no scripts), and only then install: dsh plugin --profile {profile} add <tarball URL>
 3. Only if neither exists, source from the default branch {branch}: pin the branch's latest commit first, review that commit's tree, and only then install pinned to it: dsh plugin --profile {profile} add github:<owner>/<repo>#<commit sha>
 

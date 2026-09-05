@@ -252,6 +252,15 @@ export function apply(ctx: ClientContext): void {
     return result.value
   }
 
+  const skillsSession = {
+    getSnapshot: (): string => {
+      const state = (ctx.get('sessions') as unknown as ISessions).list.getSnapshot()
+      return JSON.stringify([state.phase, state.current ?? null])
+    },
+    subscribe: (listener: () => void): (() => void) =>
+      (ctx.get('sessions') as unknown as ISessions).list.subscribe(listener),
+  }
+
   const loadCatalog = async (force: boolean): Promise<MarketCatalogResult> => {
     const remote = market
     if (remote === undefined) throw new Error('the safeMarket Remote is not mounted')
@@ -419,6 +428,7 @@ export function apply(ctx: ClientContext): void {
       setEnabled,
       loadCatalog,
       listSkills,
+      skillsSession,
       install,
       installIntoNewWorkspace,
       chooseWorkspace,

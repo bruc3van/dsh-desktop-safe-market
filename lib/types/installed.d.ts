@@ -43,6 +43,8 @@ export interface PendingUninstall {
     readonly packageName: string;
     readonly entryIds: readonly string[];
     readonly at: string;
+    /** False until removal from the manifest has been verified; absent in legacy records. */
+    readonly completed?: boolean;
 }
 /** The manager's construction facts. */
 export interface InstalledManagerOptions {
@@ -98,9 +100,12 @@ export declare function pendingFilePath(profile: string, home?: string): string;
 /**
  * Run `pnpm remove <name>` in the profile directory. The package name is
  * shape-checked again here so a future caller cannot turn the spawn into a
- * shell string; Windows uses `pnpm.cmd` without `shell`, so the argv stays
- * argv. Network is not required for a remove of an already-fetched tree.
+ * shell string; Windows uses an explicit command interpreter with a validated package name. Network is not required for a remove of an already-fetched tree.
  */
+export declare function pnpmRemoveCommand(packageName: string, platform?: NodeJS.Platform): {
+    command: string;
+    args: string[];
+};
 export declare function spawnPnpmRemove(profileDir: string, packageName: string): Promise<RemoveDependencyResult>;
 /**
  * Create the manager over one profile directory.

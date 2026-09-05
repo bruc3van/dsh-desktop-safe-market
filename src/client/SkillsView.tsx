@@ -10,6 +10,7 @@
  */
 import { useEffect, useState, type ReactElement } from 'react'
 import type { MarketSkillsResult } from '../contract.ts'
+import { watchSkills, type SkillsSessionSource } from './skillsSubscription.ts'
 import type { MarketLocale } from './copy.ts'
 import { matchesSkill } from './rows.ts'
 
@@ -26,22 +27,19 @@ type SkillsState =
   | { readonly status: 'error'; readonly message: string }
 
 /** The Skills page. */
-export function SkillsView({ t, listSkills }: {
+export function SkillsView({ t, listSkills, skillsSession }: {
   t: MarketLocale
   listSkills: () => Promise<MarketSkillsResult>
+  skillsSession: SkillsSessionSource
 }): ReactElement {
   const [state, setState] = useState<SkillsState>({ status: 'loading' })
   const [query, setQuery] = useState('')
 
-  useEffect(() => {
-    let live = true
-    void listSkills().then((result) => {
-      if (live) setState({ status: 'ready', result })
-    }, (error: unknown) => {
-      if (live) setState({ status: 'error', message: error instanceof Error ? error.message : String(error) })
-    })
-    return () => { live = false }
-  }, [listSkills])
+  useEffect(() => watchSkills(skillsSession, listSkills, {
+    loading: () => setState({ status: 'loading' }),
+    result: result => setState({ status: 'ready', result }),
+    error: error => setState({ status: 'error', message: error instanceof Error ? error.message : String(error) }),
+  }), [listSkills, skillsSession])
 
   const result = state.status === 'ready' ? state.result : null
   // Normalised once, not once per skill.

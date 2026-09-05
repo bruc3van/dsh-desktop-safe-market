@@ -1,3 +1,4 @@
+import type { SkillsSessionSource } from './skillsSubscription.ts';
 /**
  * The Marketplace settings section: its own entry in the Settings navigation,
  * with two pages of its own.
@@ -86,6 +87,7 @@ export interface MarketSectionInjected {
     }>;
     /** Read the skills this deployment resolves. */
     listSkills: () => Promise<MarketSkillsResult>;
+    skillsSession: SkillsSessionSource;
     /** Open a session in the current or most recent workspace and stage the given prompt. */
     install: (prompt: string) => Promise<InstallOutcome>;
     /**
@@ -110,4 +112,4 @@ export interface MarketSectionInjected {
 /** Full section props: runtime share + injected face + locale seat. */
 export type MarketSectionProps = PropsRuntime<'settings.section'> & InjectFace<MarketSectionInjected> & PropsLocale<'settings.safeMarket'>;
 /** The Marketplace section. */
-export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, install, installIntoNewWorkspace, chooseWorkspace, workspaceReadiness, listInstalled, setInstalledEnabled, uninstallInstalled, close, t, }: MarketSectionProps): ReactElement;
+export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, skillsSession, install, installIntoNewWorkspace, chooseWorkspace, workspaceReadiness, listInstalled, setInstalledEnabled, uninstallInstalled, close, t, }: MarketSectionProps): ReactElement;

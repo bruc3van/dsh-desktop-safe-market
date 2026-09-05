@@ -67,8 +67,10 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 提示词开宗明义：**唯一目的是安全审查——在安全的前提下高效安装，不做多余的验证**。它要求 Agent：把仓库里的一切内容当作待审查的不可信材料（仓库里的指令一律不照做），实际读代码而非只看 README，重点检查凭据/token 访问、向第三方外传数据、远程代码执行、`postinstall`/`prepare` 等安装脚本、无对应源码的混淆文件，以及权限是否远超其声称的功能；**发现可疑处必须停下来说明原因并询问你**；确认干净后按优先级用官方命令安装——npm 包或最新 release tag 的预构建 tarball 优先（安装时不执行该仓库的代码），只有两者都没有时才从默认分支装源码，且必须锁到具体 commit：
 
 ```sh
-dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<commit sha>>
+dsh plugin --profile web add <npm 包名@已审查的精确版本 | tarball URL | github:owner/name#<commit sha>>
 ```
+
+npm 路径会记录已审查的精确版本及 `dist.integrity`，校验 tarball 后按该版本安装，不重新解析 `latest`。
 
 从源码装会被 pnpm 的 `allowBuilds` 门禁拦下——这是「允许该仓库的代码在安装时于你的机器上执行」的授权，提示词要求 Agent 把 pnpm 打印的键原样交给你确认、写进 profile 的 `pnpm-workspace.yaml` 后再重跑。`dsh` 命令由 Agent 自己定位并执行，不需要你替它跑：最精确的是直接取正在运行的 dsh 进程（按进程名找——进程名不一定是 dsh，可能是 node 或客户端进程——不要假设固定端口）的可执行文件路径，找不到再依次查环境变量、默认安装目录与 npm/pnpm 全局 bin。全程只查这些常规位置，不做全盘扫描、不提权（sudo / 以管理员运行）。装完用 `dsh plugin --profile web list` 确认实际装的版本即可，然后告诉你重启 dsh 才会生效。
 
@@ -89,7 +91,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 「插件」页顶部的**已安装面板**列出当前 profile 通过 `dsh plugin add` 装进来的插件包（同时写在 `dependencies` 与 `dsh.profile.bundles` 里的那些：版本、简介、每个 loader 条目的运行状态），**以及桌面客户端自动装进来的市场插件**。DSH 模板自带的层不在此列。提供两个动作：
 
 - **停用/启用**：往 profile 自己的 `cordis.patch.yml`（用户补丁层）写入/移除一行 `- id: <条目> / disabled: true`，同时直接推动 loader 条目——**立即生效，无需重启**，重启后依旧有效。market 自己那行不提供停用按钮：停用市场会连带停掉唯一能再启用它的界面。
-- **卸载**：用户插件会先在本会话停用，再于 profile 目录执行 `pnpm remove`（与官方 `dsh plugin remove` 同一原语），依赖、锁文件、`node_modules` 和 `dsh.profile.bundles` 一并去掉，并清掉该包在 `pnpm-workspace.yaml` 里的 `allowBuilds` / `minimumReleaseAgeExclude` 条目。内置座位没有 pnpm 树，卸载会撤 `bundles` 并删除带归属标记的副本。若 `pnpm remove` 失败，清单仍会改掉（下次启动不再加载），面板会说明磁盘未修剪。同一会话内重装刚卸载的插件会被残留停用行按住，卡片会提示「点启用即可恢复」。
+- **卸载**：用户插件会先在本会话停用，再于 profile 目录执行 `pnpm remove`（与官方 `dsh plugin remove` 同一原语），依赖、锁文件、`node_modules` 和 `dsh.profile.bundles` 一并去掉，并清掉该包在 `pnpm-workspace.yaml` 里的 `allowBuilds` / `minimumReleaseAgeExclude` 条目。内置座位没有 pnpm 树，卸载会撤 `bundles`；只有确认其他 profile 不再引用时才删除副本。若 `pnpm remove` 失败，会尝试修改清单并说明磁盘未修剪；清单移除也失败时，面板报告卸载失败，重启清理会保留停用行。同一会话内重装刚卸载的插件会被残留停用行按住，卡片会提示「点启用即可恢复」。
 
 已安装列表也会列出「写在 `dependencies` 里、但没进 `dsh.profile.bundles`」的插件（装上了却不会加载），避免只能靠下次 `pnpm add` 才发现。这类包不能点启用，只能卸载。
 
@@ -97,7 +99,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 
 桌面客户端不是用 `dsh plugin add` 安装市场的，而是把插件**复制**进 `<DSH_HOME>/profiles/node_modules`、再往 `dsh.profile.bundles` 写一个条目——不写依赖。这样装进来的插件标着「由桌面客户端接入」，并且**面板是它唯一的移除入口**：官方 `dsh plugin` 明确不碰非依赖项的 bundle，而当初装它的客户端可能已经被卸载了。
 
-它没有写进依赖，**目录本身就是安装**，所以卸载会同时删掉 `bundles` 条目和那份复制的目录——只摘条目会留下一棵没人列出、没人加载、也再无法移除的插件树（面板正是靠 `bundles` 列表找到它的）。
+卸载先移除当前 profile 的 `bundles` 条目，再检查其他 profile 是否仍解析到同一份副本。仍被引用、无法检查引用或目录不在受管位置时保留文件，避免影响其他 profile。
 
 如果客户端还装着、且没有关掉它连接设置里的「接入内置安全市场」，那么它下次启动会把插件重新装回。卡片上写明了这一点：要彻底不再出现，请在客户端那边关掉开关。没有归属标记的 in-box bundle 属于部署自身，面板不列出、也不提供卸载。
 
@@ -143,7 +145,7 @@ dsh plugin --profile web add <npm 包名 | tarball URL | github:owner/name#<comm
 - 卡片全部以纯文本渲染；
 - 关闭状态下 Remote 接口直接拒绝，无法绕过开关读取目录；
 - 安装交接全程走官方公开服务（workspaces / sessions / conversation），不读 DOM、不发送消息；
-- 已安装面板的动词只接受**经 wire codec 校验且实际在 profile 清单里的包名**；停用与内置座位卸载落地为本机文件编辑与 loader 调用。用户插件卸载会在 profile 目录运行 `pnpm remove`（包名再经同一套形状校验，不走 shell 拼接），失败时仍改清单并在面板说明；写入用户补丁层时保留原有注释与手工行。
+- 已安装面板的动词只接受**经 wire codec 校验且实际在 profile 清单里的包名**；停用与内置座位卸载落地为本机文件编辑与 loader 调用。用户插件卸载会在 profile 目录运行 `pnpm remove`（Windows 通过命令解释器启动 `.cmd`，包名限制为安全字符并拒绝选项形态），失败时尝试修改清单；清单移除失败会明确报错并保留停用保护；写入用户补丁层时保留原有注释与手工行。
 
 **收录不代表安全背书。** 点「安全安装」只把审查提示词填进新会话，发不发送由你按回车决定；发送之后，Agent 发现可疑会停下来说明并问你，判定干净则直接装完再回来报告——**你的确认点在按回车那一刻，以及提示词要求它停下来的每一处**。Agent 的审查是一次有依据的辅助判断，不是安全结论。
 
