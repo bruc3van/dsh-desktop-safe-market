@@ -76,6 +76,49 @@ export const cssText = `
   pointer-events: none;
   color: var(--dsw-alias-label-primary);
 }
+.dsh_market_reviewMenu {
+  position: absolute;
+  z-index: 10;
+  top: calc(100% + 4px);
+  right: 0;
+  min-width: 216px;
+  max-width: calc(100vw - 32px);
+  padding: 8px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 16px;
+  background: var(--dsw-alias-bg-layer-1);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
+}
+.dsh_market_reviewOption {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  width: 100%;
+  padding: 10px 6px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--dsw-alias-label-primary);
+  font: inherit;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: left;
+  cursor: pointer;
+}
+.dsh_market_reviewOption:hover,
+.dsh_market_reviewOption:focus-visible {
+  background: var(--dsw-alias-interactive-bg-hover);
+  outline: none;
+}
+.dsh_market_skillSource { overflow-wrap: anywhere; }
+.dsh_market_skillsTitle {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 400;
+  line-height: 20px;
+  color: var(--dsw-alias-label-tertiary);
+}
 .dsh_market_headingRow {
   display: flex;
   align-items: baseline;

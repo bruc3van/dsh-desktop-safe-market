@@ -50,9 +50,7 @@ export function SkillsView({ t, listSkills, skillsSession }: {
 
   return (
     <div className="dsh_market_page">
-      <div className="dsh_market_intro">
-        <p className="dsh_market_introTitle">{t('skills.title')}</p>
-      </div>
+      <p className="dsh_market_skillsTitle">{t('skills.title')}</p>
 
       {result !== null && result.skills.length > 0 && (
         <div className="dsh_market_bar">
@@ -98,12 +96,10 @@ export function SkillsView({ t, listSkills, skillsSession }: {
               <div className="dsh_market_head">
                 <span className="dsh_market_name" title={skill.name}>{skill.name}</span>
               </div>
-              <p className="dsh_market_meta">
-                {[
-                  t('skills.provider', { provider: skill.provider }),
-                  skill.modelInvocable ? t('skills.model') : '',
-                  skill.userInvocable ? t('skills.user') : '',
-                ].filter(part => part !== '').join(' · ')}
+              <p className="dsh_market_meta dsh_market_skillSource" title={skill.sourceDirectory}>
+                {skill.sourceDirectory
+                  ? t('skills.provider', { provider: skill.sourceDirectory })
+                  : t('skills.sourceUnavailable')}
               </p>
               {skill.description !== '' && <p className="dsh_market_desc">{skill.description}</p>}
               {skill.whenToUse !== '' && <p className="dsh_market_meta">{skill.whenToUse}</p>}

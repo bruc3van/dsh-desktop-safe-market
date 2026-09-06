@@ -112,10 +112,10 @@ test('the disclaimer describes the flow that actually runs', () => {
   // The agent is authorized to finish the install on its own verdict. Copy
   // promising a second, post-conclusion human decision describes a different
   // product — so the disclaimer names the real checkpoints instead.
-  assert.match(zh['intro.disclaimer'], /发不发送由你按回车决定/)
-  assert.match(zh['intro.disclaimer'], /判定干净则直接装完/)
-  assert.match(en['intro.disclaimer'], /sending it is your Enter key/)
-  assert.match(en['intro.disclaimer'], /it installs and reports back/)
+  assert.match(zh['intro.body'], /由你发送后/)
+  assert.match(zh['intro.body'], /通过后安装并报告/)
+  assert.match(en['intro.body'], /for you to send/)
+  assert.match(en['intro.body'], /installs and reports back if the review passes/)
 })
 
 // ——— the stylesheet's palette and namespace rules ———

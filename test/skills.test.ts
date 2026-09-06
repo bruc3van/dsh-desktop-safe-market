@@ -13,7 +13,7 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import type { Context } from '@deepseek-ai/cordis'
-import { readSkills, type SkillReadAgent } from '../src/skills.ts'
+import { readSkills, skillDirectory, type SkillReadAgent } from '../src/skills.ts'
 
 /** One registry row in the shape `snapshot` returns. */
 interface Row {
@@ -21,6 +21,7 @@ interface Row {
   description?: string
   whenToUse?: string
   provider: string
+  resourceBase?: { kind: 'directory'; path: string } | { kind: 'url'; url: string }
   invocation: { modelInvocable: boolean; userInvocable: boolean }
 }
 
@@ -148,4 +149,25 @@ test('an error with no message still names itself', async () => {
   const result = await readSkills(ctxWith(new Error('')), agent('/w'), AbortSignal.abort())
   assert.equal(result.error, 'unknown error')
   assert.equal(result.complete, false)
+})
+
+
+test('directory labels preserve workspace, home, custom and Windows provenance', () => {
+  assert.equal(skillDirectory('/work/.agents/skills/design', '/work', '/home/me'), '.agents/skills')
+  assert.equal(skillDirectory('/home/me/.agents/skills/design', '/work', '/home/me'), '~/.agents/skills')
+  assert.equal(skillDirectory('/shared/skills/design', '/work', '/home/me'), '/shared/skills/design')
+  assert.equal(skillDirectory('/work-other/design', '/work', '/home/me'), '/work-other/design')
+  assert.equal(skillDirectory('C:/work/.agents/skills/design', 'C:/work', 'C:/Users/me'), '.agents/skills')
+  assert.equal(skillDirectory('D:/skills/design', 'C:/work', 'C:/Users/me'), 'D:/skills/design')
+})
+
+test('skill reads carry actual resource directories without guessing from provider names', async () => {
+  const result = await readSkills(ctxWith({complete: true, skills: [
+    row('disk', {provider: 'local', resourceBase: {kind: 'directory', path: '/work/.agents/skills/disk'}}),
+    row('remote', {resourceBase: {kind: 'url', url: 'https://example.com/skill'}}),
+    row('runtime'),
+  ]}), agent('/work'), new AbortController().signal)
+  assert.equal(result.skills[0]!.sourceDirectory, '.agents/skills')
+  assert.equal(result.skills[1]!.sourceDirectory, undefined)
+  assert.equal(result.skills[2]!.sourceDirectory, undefined)
 })

@@ -13,6 +13,8 @@
  * lost a provider's skills would read as "you have none of those", which is a
  * different and wrong statement.
  */
+import { homedir } from 'node:os'
+import { posix, win32 } from 'node:path'
 import type { Context } from '@deepseek-ai/cordis'
 import type { MarketSkill, MarketSkillsResult } from './contract.ts'
 
@@ -24,6 +26,7 @@ interface SkillRegistryFace {
       description?: string
       whenToUse?: string
       provider: string
+      resourceBase?: { kind: 'directory'; path: string } | { kind: 'url'; url: string } | { kind: 'opaque'; description: string }
       invocation: { modelInvocable: boolean; userInvocable: boolean }
     }[]
     complete: boolean
@@ -37,6 +40,25 @@ function text(value: unknown, limit: number): string {
   // surrogate pair cannot leave a lone half behind.
   const points = [...trimmed]
   return points.length > limit ? `${points.slice(0, limit - 1).join('')}…` : trimmed
+}
+
+/** Show conventional skill roots; abbreviate verified workspace/home ancestors. */
+export function skillDirectory(directory: string, cwd?: string, home = homedir()): string {
+  const root = directory.match(/^(.*?[\\/](?:\.agents|\.dsh)[\\/]skills)(?:[\\/]|$)/)
+  directory = root?.[1] ?? directory
+  const paths = win32.isAbsolute(directory) && !posix.isAbsolute(directory) ? win32 : posix
+  const inside = (base: string): string | undefined => {
+    if (!paths.isAbsolute(base)) return undefined
+    const relative = paths.relative(base, directory)
+    if (relative === '..' || relative.startsWith(`..${paths.sep}`) || paths.isAbsolute(relative)) return undefined
+    return relative.split(paths.sep).join('/')
+  }
+  if (cwd !== undefined) {
+    const relative = inside(cwd)
+    if (relative !== undefined) return relative || '.'
+  }
+  const relative = inside(home)
+  return relative !== undefined ? (relative === '' ? '~' : `~/${relative}`) : directory
 }
 
 /** The addressed agent, structurally: its scope key and its workspace. */
@@ -67,6 +89,9 @@ export async function readSkills(
       description: text(entry.description, 400),
       whenToUse: text(entry.whenToUse, 400),
       provider: text(entry.provider, 60),
+      ...(entry.resourceBase?.kind === 'directory'
+        ? { sourceDirectory: skillDirectory(entry.resourceBase.path, agent.session.header.cwd) }
+        : {}),
       modelInvocable: entry.invocation.modelInvocable,
       userInvocable: entry.invocation.userInvocable,
     }))

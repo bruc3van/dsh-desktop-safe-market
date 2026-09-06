@@ -72,7 +72,7 @@ export function matches(item: MarketPlugin, query: string, category: string, eng
 /** Whether one skill survives the current query. */
 export function matchesSkill(skill: MarketSkill, query: string): boolean {
   if (query === '') return true
-  const haystack = `${skill.name} ${skill.description} ${skill.whenToUse} ${skill.provider}`.toLocaleLowerCase()
+  const haystack = `${skill.name} ${skill.description} ${skill.whenToUse} ${skill.provider} ${skill.sourceDirectory ?? ''}`.toLocaleLowerCase()
   return query.split(/\s+/).every(word => haystack.includes(word))
 }
 

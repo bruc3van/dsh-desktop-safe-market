@@ -42,14 +42,13 @@ export declare const zh: {
     readonly 'tabs.aria': "安全市场分区";
     readonly 'intro.title': "安全市场";
     readonly 'intro.slogan': "先审查，再安装。";
-    readonly 'intro.body': string;
+    readonly 'intro.body': "社区插件来自 awesome-dsh-plugin，每日更新，启用后联网读取目录。点击「安全安装」生成审查提示词，由你发送后交给 Agent 审查：有疑点先询问，通过后安装并报告。收录和审查均不保证安全。";
     readonly 'intro.enable': "启用安全市场";
     readonly 'intro.enabling': "正在启用…";
     readonly 'intro.enableFailed': "启用失败：{reason}";
     readonly 'intro.disable': "停用安全市场";
     readonly 'intro.disabling': "正在停用…";
     readonly 'intro.disableFailed': "停用失败：{reason}";
-    readonly 'intro.disclaimer': string;
     readonly search: "搜索插件名称、简介或分类";
     readonly all: "全部";
     readonly refresh: "刷新";
@@ -130,6 +129,7 @@ export declare const zh: {
     readonly 'skills.model': "模型可调用";
     readonly 'skills.user': "用户可调用（/名称）";
     readonly 'skills.provider': "来源 {provider}";
+    readonly 'skills.sourceUnavailable': "未提供来源目录";
 };
 /** English dictionary. */
 export declare const en: Record<SafeMarketLocaleKey, string>;

@@ -115,22 +115,13 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
 
   'intro.title': '安全市场',
   'intro.slogan': '先审查，再安装。',
-  'intro.body': '按分类均衡列出社区精选插件，数据来自 awesome-dsh-plugin 每日刷新的目录。'
-    + '开启后本机会从 GitHub 读取该目录快照；关闭时不会发起任何网络请求。',
+  'intro.body': '社区插件来自 awesome-dsh-plugin，每日更新，启用后联网读取目录。点击「安全安装」生成审查提示词，由你发送后交给 Agent 审查：有疑点先询问，通过后安装并报告。收录和审查均不保证安全。',
   'intro.enable': '启用安全市场',
   'intro.enabling': '正在启用…',
   'intro.enableFailed': '启用失败：{reason}',
   'intro.disable': '停用安全市场',
   'intro.disabling': '正在停用…',
   'intro.disableFailed': '停用失败：{reason}',
-  // Describes the actual flow, not an idealized one. The agent is authorized
-  // to finish the install on its own verdict — the human checkpoint is the
-  // Enter key before the review, plus every stop the prompt makes it take.
-  // Copy that implied a second, post-conclusion decision was describing a
-  // product this is not.
-  'intro.disclaimer': '收录不代表安全背书。点「安全安装」只把审查提示词填进新会话——发不发送由你按回车决定。'
-    + '发送后由 Agent 读代码：发现可疑会停下来说明并问你，判定干净则直接装完再回来报告。'
-    + '这是一次有依据的辅助判断，不是安全结论。',
 
   'search': '搜索插件名称、简介或分类',
   'all': '全部',
@@ -218,6 +209,7 @@ dsh 命令由你自己定位并执行，不要让我替你跑。按顺序找：�
   'skills.model': '模型可调用',
   'skills.user': '用户可调用（/名称）',
   'skills.provider': '来源 {provider}',
+  'skills.sourceUnavailable': '未提供来源目录',
 } as const
 
 /** English dictionary. */
@@ -312,19 +304,13 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
 
   'intro.title': 'Safe Market',
   'intro.slogan': 'Review first, then install.',
-  'intro.body': 'A shortlist of community plugins, balanced across categories, from the daily-refreshed'
-    + ' awesome-dsh-plugin catalog. Turning it on lets this machine read that catalog snapshot from GitHub;'
-    + ' while it is off, nothing is requested.',
+  'intro.body': 'Community plugins come from the daily-updated awesome-dsh-plugin catalog, fetched online when enabled. Review and install drafts a prompt for you to send: the agent reviews it, asks about concerns, then installs and reports back if the review passes. Neither listing nor review guarantees safety.',
   'intro.enable': 'Enable Safe Market',
   'intro.enabling': 'Enabling…',
   'intro.enableFailed': 'Could not enable: {reason}',
   'intro.disable': 'Disable Safe Market',
   'intro.disabling': 'Disabling…',
   'intro.disableFailed': 'Could not disable: {reason}',
-  'intro.disclaimer': 'Being listed is not a safety endorsement. Review and install only writes the review prompt'
-    + ' into a new session — sending it is your Enter key. Once sent, the agent reads the code: it stops and asks'
-    + ' you if anything looks suspicious, and if it judges the code clean it installs and reports back.'
-    + ' That is an informed second opinion, not a verdict.',
 
   'search': 'Search plugins by name, description, or category',
   'all': 'All',
@@ -416,6 +402,7 @@ After the upgrade, run \`dsh plugin --profile {profile} list <package name>\` to
   'skills.model': 'Model-invocable',
   'skills.user': 'User-invocable (/name)',
   'skills.provider': 'from {provider}',
+  'skills.sourceUnavailable': 'Source directory unavailable',
 }
 
 /** The dictionary's key set. */

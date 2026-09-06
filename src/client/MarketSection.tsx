@@ -39,6 +39,7 @@ import {
   INSTALLED_FILTER, SELF_CARD_KEY, SELF_MARKET_PLUGIN, installedUpdateCardKey, matches, starCount, stateOf,
 } from './rows.ts'
 import { SkillsView } from './SkillsView.tsx'
+import { ReviewSelector } from './ReviewSelector.tsx'
 
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
 export interface SafeMarketSnapshot {
@@ -620,7 +621,6 @@ function PluginsPage({ t, english, reviewMode, snapshot, setEnabled, loadCatalog
           <p className="dsh_market_introTitle">{t('intro.title')}</p>
           <p className="dsh_market_introSlogan">{t('intro.slogan')}</p>
           <p className="dsh_market_introBody">{t('intro.body')}</p>
-          <p className="dsh_market_disclaimer">{t('intro.disclaimer')}</p>
           {switchError !== '' && <p className="dsh_market_status" data-error="true">{switchError}</p>}
           <div className="dsh_market_introActions">
             <button
@@ -1072,19 +1072,9 @@ export function MarketSection({
           <div id={`${tabsId}-review-hint`} className="dsh_market_reviewDescription">
             {t(reviewMode === 'full' ? 'review.fullHint' : 'review.compactHint')}
           </div>
-          {snapshot.profile !== null && <div className="dsh_market_reviewDescription">{t('review.profile', { profile: snapshot.profile })}</div>}
         </div>
-        <div className="dsh_market_reviewSelector">
-          <select id={`${tabsId}-review-mode`} aria-describedby={`${tabsId}-review-hint`}
-            className="dsh_market_reviewSelect" value={reviewMode} disabled={installBusy}
-            onChange={event => setReviewMode(event.target.value === 'full' ? 'full' : 'compact')}>
-            <option value="compact">{t('review.compact')}</option>
-            <option value="full">{t('review.full')}</option>
-          </select>
-          <svg className="dsh_market_reviewChevron" width="14" height="14" viewBox="0 0 14 14" fill="none" aria-hidden="true">
-            <path d="m3 5 4 4 4-4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
-          </svg>
-        </div>
+        <ReviewSelector id={`${tabsId}-review-mode`} describedBy={`${tabsId}-review-hint`}
+          value={reviewMode} disabled={installBusy} onChange={setReviewMode} t={t} />
       </div>
       <div className="dsh_market_tabs" role="tablist" aria-label={t('tabs.aria')}>
         {pages.map((entry, index) => (

@@ -73,6 +73,8 @@ export interface MarketSkill {
   readonly whenToUse: string
   /** The provider that owns the skill body (`filesystem`, `runtime`, …). */
   readonly provider: string
+  /** Actual resource directory, relative to the workspace or home when possible. */
+  readonly sourceDirectory?: string
   /** Whether the model may invoke it on its own. */
   readonly modelInvocable: boolean
   /** Whether the user may invoke it with `/name`. */
@@ -262,6 +264,7 @@ export const marketSkillSchema = z.object({
   description: z.string(),
   whenToUse: z.string(),
   provider: z.string(),
+  sourceDirectory: z.string().optional(),
   modelInvocable: z.boolean(),
   userInvocable: z.boolean(),
 }).readonly()
