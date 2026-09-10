@@ -6,7 +6,7 @@ import {
   SAFE_MARKET_NAMESPACE,
 } from '../src/settings.ts'
 
-test('settings register through the DSH 0.1.2 provider without the removed namespace factory', () => {
+test('settings register through the DSH provider without the removed namespace factory', () => {
   const calls: unknown[][] = []
   const scope = { get: () => ({ enabled: false }) }
   const ctx = {

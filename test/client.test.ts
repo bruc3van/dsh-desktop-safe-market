@@ -40,7 +40,7 @@ test('the browser bundle requests only module-table platform seeds', async () =>
   assert.ok(!bundle.includes('dsh-client-runtime'))
 })
 
-test('the client manifest names its DSH 0.1.2 Controller and UI dependencies', async () => {
+test('the client manifest names its DSH Controller and UI dependencies', async () => {
   const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8')) as {
     dsh: { client: { inject: string[] } }
   }

@@ -1,7 +1,7 @@
 /** Workspace identities are opaque to this adapter and only passed back to DSH services. */
 export type WorkspaceTarget = string
 
-/** Workspace facts exposed by the DSH 0.1.2 Workspace Controller. */
+/** Workspace facts exposed by the DSH Workspace Controller. */
 export interface WorkspaceState {
   readonly phase: 'pending' | 'ready'
   readonly items: readonly {
@@ -27,7 +27,7 @@ export interface MarketWorkspaces {
   create(input: { path: string }): Promise<{ workspaceId: WorkspaceTarget }>
 }
 
-/** Cross-Controller navigation supplied by the DSH 0.1.2 Web profile. */
+/** Cross-Controller navigation supplied by the DSH Web profile. */
 export interface MarketUiWorkspace {
   connectWorkspace(workspaceId: WorkspaceTarget): Promise<string>
   pickDirectory(): Promise<string | null>

@@ -5,7 +5,7 @@ import {
   workspaceTargetOf,
 } from '../src/client/workspaceCompat.ts'
 
-test('workspace readiness requires both 0.1.2 Controller baselines', () => {
+test('workspace readiness requires both split Controller baselines', () => {
   assert.equal(workspaceReady(
     { phase: 'pending', items: [] },
     { phase: 'ready', byId: {} },

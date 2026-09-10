@@ -9,7 +9,7 @@ import z from '@deepseek-ai/schemastery'
 import type { SettingsScope } from '@deepseek-ai/dsh-settings'
 import type { SafeMarketSettings } from './contract.ts'
 
-/** Namespace validated by the DSH 0.1.2 settings provider at registration. */
+/** Namespace validated by the DSH settings provider at registration. */
 export const SAFE_MARKET_NAMESPACE = 'safe-market'
 
 /**

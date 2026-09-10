@@ -19,10 +19,25 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..')
 const pkg = JSON.parse(await readFile(resolve(root, 'package.json'), 'utf8')) as {
   name: string
   version: string
+  peerDependencies: Record<string, string>
+  devDependencies: Record<string, string>
 }
 const plugin = JSON.parse(await readFile(resolve(root, 'dsh.plugin.json'), 'utf8')) as { version: string }
 
 const npmInstall = `dsh plugin --profile web add ${pkg.name}`
+
+test('DSH dependencies keep the declared runtime and development baseline', () => {
+  for (const [kind, expected] of [
+    ['peerDependencies', '^0.1.5-rc.1'],
+    ['devDependencies', '0.1.5-rc.1'],
+  ] as const) {
+    const dependencies = Object.entries(pkg[kind]).filter(([name]) => name.startsWith('@deepseek-ai/dsh-'))
+    assert.ok(dependencies.length > 0, `${kind} must declare DSH dependencies`)
+    for (const [name, version] of dependencies) {
+      assert.equal(version, expected, `${kind}.${name} must use the DSH baseline`)
+    }
+  }
+})
 
 /** Every release-tarball tag a README pins, e.g. `v0.2.2`. */
 function tarballTags(markdown: string): string[] {
@@ -62,15 +77,17 @@ for (const name of ['README.md', 'README_EN.md'] as const) {
     }
   })
 
-  test(`${name} states the intentional DSH 0.1.2-only compatibility boundary`, async () => {
+  test(`${name} states the DSH 0.1.5 compatibility baseline`, async () => {
     const markdown = await readFile(resolve(root, name), 'utf8')
-    assert.match(markdown, /0\.1\.2-alpha\.3/)
+    assert.match(markdown, /0\.1\.5-rc\.1/)
     assert.match(markdown, /0\.1\.1/)
     assert.match(
       markdown,
-      name === 'README.md' ? /不兼容 DSH 0\.1\.1/ : /do not support the DSH 0\.1\.1/,
-      `${name} must say plainly that new releases do not support DSH 0.1.1`,
+      name === 'README.md' ? /不兼容 DSH 0\.1\.1 和 0\.1\.2/ : /does not support the DSH 0\.1\.1 or 0\.1\.2/,
+      `${name} must state that the current release does not support DSH 0.1.1 or 0.1.2`,
     )
+    assert.match(markdown, /dsh-desktop-safe-market@0\.3\.0/)
+    assert.match(markdown, /0\.1\.2[^\n]*dsh-desktop-safe-market@0\.4\.3/)
   })
 }
 

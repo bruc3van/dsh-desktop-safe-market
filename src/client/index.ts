@@ -68,7 +68,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 /** Dictionary namespace owned by this plugin. */
 export const NS = 'settings.safeMarket'
 
-/** Required 0.1.2 services: locale, Remote, split Controllers, navigation, and conversation. */
+/** Required DSH services: locale, Remote, split Controllers, navigation, and conversation. */
 export const inject = ['slots', 'locale', 'remote', 'sessions', 'workspaces', 'uiWorkspace', 'conversation']
 
 /** How long the hand-off waits for a freshly opened session to own a client scope. */

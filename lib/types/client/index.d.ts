@@ -11,7 +11,7 @@ declare module '@deepseek-ai/dsh-client-ui-slots' {
 }
 /** Dictionary namespace owned by this plugin. */
 export declare const NS = "settings.safeMarket";
-/** Required 0.1.2 services: locale, Remote, split Controllers, navigation, and conversation. */
+/** Required DSH services: locale, Remote, split Controllers, navigation, and conversation. */
 export declare const inject: string[];
 /**
  * Compose the marketplace surface.
