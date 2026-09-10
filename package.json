@@ -1,7 +1,7 @@
 {
   "name": "dsh-desktop-safe-market",
   "description": "A safety-first plugin marketplace for the DeepSeek Harness web GUI: a curated community shortlist, and an install that starts with a security review",
-  "version": "0.5.0",
+  "version": "0.5.1",
   "license": "MIT",
   "type": "module",
   "main": "lib/index.js",
@@ -52,6 +52,7 @@
         "@deepseek-ai/dsh-client-ui-conversation",
         "@deepseek-ai/dsh-client-ui-renderer",
         "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-sidebar-right",
         "@deepseek-ai/dsh-client-ui-workspace"
       ]
     }
@@ -155,6 +156,7 @@
     "@deepseek-ai/dsh-client-ui-conversation": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-renderer": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-settings": "0.1.5-rc.1",
+    "@deepseek-ai/dsh-client-ui-sidebar-right": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-slots": "0.1.5-rc.1",
     "@deepseek-ai/dsh-client-ui-workspace": "0.1.5-rc.1",
     "@deepseek-ai/dsh-invariants": "0.1.5-rc.1",

@@ -1,4 +1,3 @@
-import { DEFAULT_REVIEW_MODE, reviewPromptKey, type ReviewMode } from './reviewMode.ts'
 import type { SkillsSessionSource } from './skillsSubscription.ts'
 /**
  * The Marketplace settings section: its own entry in the Settings navigation,
@@ -39,7 +38,6 @@ import {
   INSTALLED_FILTER, SELF_CARD_KEY, SELF_MARKET_PLUGIN, installedUpdateCardKey, matches, starCount, stateOf,
 } from './rows.ts'
 import { SkillsView } from './SkillsView.tsx'
-import { ReviewSelector } from './ReviewSelector.tsx'
 
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
 export interface SafeMarketSnapshot {
@@ -504,10 +502,9 @@ function InstalledCards({ t, installed, snapshot, cards, installBusy, readiness,
 }
 
 /** The Plugins page. */
-function PluginsPage({ t, english, reviewMode, snapshot, setEnabled, loadCatalog, listInstalled, setInstalledEnabled, uninstallInstalled, chooseWorkspace, workspaceReadiness, cards, installBusy, onInstall }: {
+function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstalled, setInstalledEnabled, uninstallInstalled, chooseWorkspace, workspaceReadiness, cards, installBusy, onInstall }: {
   t: MarketLocale
   english: boolean
-  reviewMode: ReviewMode
   snapshot: SafeMarketSnapshot
   setEnabled: MarketSectionInjected['setEnabled']
   loadCatalog: MarketSectionInjected['loadCatalog']
@@ -680,9 +677,6 @@ function PluginsPage({ t, english, reviewMode, snapshot, setEnabled, loadCatalog
     const common = {
       url: item.url,
       profile,
-      // The Host reduces defaultBranch to a safe pattern (falling back to
-      // `main`), so the interpolated value can only be a branch name.
-      branch: item.defaultBranch,
     }
     // Already installed: the hand-off is the same one, aimed at the newer
     // version. Whether one EXISTS is the agent's first task, not something
@@ -690,23 +684,16 @@ function PluginsPage({ t, english, reviewMode, snapshot, setEnabled, loadCatalog
     // not release versions — so the prompt opens by asking it to establish
     // that and to stop if the answer is no.
     onInstall(item.fullName, owned === undefined
-      ? t(reviewPromptKey(reviewMode, false), common)
-      : t(reviewPromptKey(reviewMode, true), { ...common, installed: describeInstalled(owned) }), viaNewWorkspace)
+      ? t('prompt', common)
+      : t('prompt.upgrade', { ...common, installed: describeInstalled(owned) }), viaNewWorkspace)
   }
 
   const runInstalledUpdate = (item: MarketInstalledPackage, viaNewWorkspace: boolean): void => {
     const profile = snapshot.profile
     if (profile === null || item.repository === '') return
-    // Prefer the catalog's validated default branch when this installed
-    // repository is listed. An unlisted package still has a Host-validated
-    // owner/name identity; HEAD asks git for that repository's remote default
-    // instead of guessing that every project calls it `main`.
-    const catalogItem = catalog?.items.find(entry =>
-      entry.fullName.toLocaleLowerCase() === item.repository.toLocaleLowerCase())
-    onInstall(installedUpdateCardKey(item.packageName), t(reviewPromptKey(reviewMode, true), {
+    onInstall(installedUpdateCardKey(item.packageName), t('prompt.upgrade', {
       url: `https://github.com/${item.repository}`,
       profile,
-      branch: catalogItem?.defaultBranch ?? 'HEAD',
       installed: describeInstalled(item),
     }), viaNewWorkspace)
   }
@@ -942,7 +929,6 @@ export function MarketSection({
   // prompt follow the same setting the rest of the copy does.
   const english = t('lang') === 'en'
   const [page, setPage] = useState<Page>('plugins')
-  const [reviewMode, setReviewMode] = useState<ReviewMode>(DEFAULT_REVIEW_MODE)
   const [cards, setCards] = useState<Readonly<Record<string, CardState>>>({})
   const tabsId = useId()
   // Mirror of the card states for same-tick guards (the rendered copy lags a
@@ -1028,10 +1014,9 @@ export function MarketSection({
   const runSelfUpgrade = (): void => {
     const profile = snapshot.profile
     if (profile === null) return
-    runInstall(SELF_CARD_KEY, t(reviewPromptKey(reviewMode, true), {
+    runInstall(SELF_CARD_KEY, t('prompt.upgrade', {
       url: SELF_MARKET_PLUGIN.url,
       profile,
-      branch: SELF_MARKET_PLUGIN.defaultBranch,
       installed: isSafeVersion(snapshot.version) ? `${PACKAGE_NAME} ${snapshot.version}` : PACKAGE_NAME,
     }), workspaceReadiness.getSnapshot() === 'none')
   }
@@ -1066,16 +1051,6 @@ export function MarketSection({
           {selfUpgrade.message}
         </p>
       )}
-      <div className="dsh_market_review">
-        <div className="dsh_market_reviewText">
-          <label className="dsh_market_reviewTitle" htmlFor={`${tabsId}-review-mode`}>{t('review.label')}</label>
-          <div id={`${tabsId}-review-hint`} className="dsh_market_reviewDescription">
-            {t(reviewMode === 'full' ? 'review.fullHint' : 'review.compactHint')}
-          </div>
-        </div>
-        <ReviewSelector id={`${tabsId}-review-mode`} describedBy={`${tabsId}-review-hint`}
-          value={reviewMode} disabled={installBusy} onChange={setReviewMode} t={t} />
-      </div>
       <div className="dsh_market_tabs" role="tablist" aria-label={t('tabs.aria')}>
         {pages.map((entry, index) => (
           <button
@@ -1108,7 +1083,6 @@ export function MarketSection({
         <PluginsPage
           t={t}
           english={english}
-          reviewMode={reviewMode}
           snapshot={snapshot}
           setEnabled={setEnabled}
           loadCatalog={loadCatalog}

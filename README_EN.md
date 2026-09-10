@@ -2,7 +2,7 @@
 
 **Review first, then install.**
 
-The market header switches between Full review and Compact review for installs, plugin upgrades, and market upgrades. Reopening Settings defaults to Compact review. Compact review focuses on entry points and sensitive operations, expanding on findings while retaining version pinning, integrity checks, and install gates. The Host supplies the target profile for automatic prompt filling from the plugin configuration (`profile`, default `web`); custom deployments must configure it correctly.
+Installs, plugin upgrades, and market upgrades use one review template: review only the artifact to be installed, execute none of its scripts during review, and pin an exact version or commit. Suspicious findings, installation mismatches, and build gates stop the flow for your decision. Reports default to three sections: verdict, installed artifact and integrity value, and exceptions. The Host supplies the target profile for prompt filling (default `web`).
 
 [中文](./README.md) | English
 
@@ -16,7 +16,17 @@ In use, it adds a **Safe Market** entry to the Settings navigation (wearing the 
 - **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable; the marketplace plugin the desktop client placed is listed here too, because nowhere else can remove it. Layers shipped with DSH, and in-box bundles carrying no ownership marker, are not listed. Below it, the curated market, whose **All plugins** view ranks by stars.
 - **Skills** — what the current session can actually resolve.
 
-![The Safe Market tab](./assets/screenshots/marketplace.png)
+## Two ways to browse
+
+**Option 1: Settings.** Open Settings → Safe Market.
+
+![Safe Market in Settings](./assets/screenshots/marketplace.png)
+
+**Option 2: Right sidebar.** Open a session, expand the right sidebar, and choose Safe Market on the Start page to browse in a sidebar tab. The screenshot shows the entry on the left and the open market page on the right.
+
+![Safe Market entry and market tab in the right sidebar](./assets/screenshots/marketplace-sidebar.png)
+
+Both views share the market switch and operations. The sidebar entry requires DSH's right Sidebar service; Settings remains available without it.
 
 ## What it is for
 
@@ -41,7 +51,7 @@ Install DSH Safe Market for me: run the official command `dsh plugin --profile w
 To pin the version this document names, use the GitHub release tarball:
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.0.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.1.tar.gz
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -50,9 +60,9 @@ The browser, the CLI, and the desktop client share one profile, so the entry app
 
 ### DSH version compatibility
 
-Safe Market 0.5.0 requires at least **DSH `0.1.5-rc.1`**, with DSH peer and development dependencies aligned to that baseline. It directly uses the split Session/Workspace Controllers, `uiWorkspace`, and the new Settings Provider API.
+Safe Market 0.5.1 requires at least **DSH `0.1.5-rc.1`**, with DSH peer and development dependencies aligned to that baseline. It directly uses the split Session/Workspace Controllers, `uiWorkspace`, and the new Settings Provider API.
 
-This is an intentional compatibility trade-off: Safe Market 0.5.0 **does not support the DSH 0.1.1 or 0.1.2 lines** and no longer includes a fallback to the monolithic `dsh-client-runtime`. Environments that remain on 0.1.1 should keep `dsh-desktop-safe-market@0.3.0`; environments on 0.1.2 (at least `0.1.2-alpha.3`) should keep `dsh-desktop-safe-market@0.4.3`. Upgrade DSH to `0.1.5-rc.1` before upgrading to Safe Market 0.5.0.
+This is an intentional compatibility trade-off: Safe Market 0.5.1 **does not support the DSH 0.1.1 or 0.1.2 lines** and no longer includes a fallback to the monolithic `dsh-client-runtime`. Environments that remain on 0.1.1 should keep `dsh-desktop-safe-market@0.3.0`; environments on 0.1.2 (at least `0.1.2-alpha.3`) should keep `dsh-desktop-safe-market@0.4.3`. Upgrade DSH to `0.1.5-rc.1` before upgrading to Safe Market 0.5.1.
 
 ## You turn it on yourself
 
@@ -74,7 +84,7 @@ dsh plugin --profile web add <npm package@reviewed-exact-version | tarball URL |
 
 The npm path records the reviewed exact version and `dist.integrity`, verifies the tarball, and installs that version without re-resolving `latest`.
 
-A source install is blocked by pnpm's `allowBuilds` gate — permission for the repository's code to run on your machine at install time — and the prompt has the agent hand pnpm's printed key to you verbatim, wait for it to land in the profile's `pnpm-workspace.yaml`, and re-run. The agent locates and runs `dsh` itself — you are never asked to run commands: most precisely, it takes the executable path of the running dsh process (found by process name — which need not be `dsh`, it can be node or the client's own process — with no fixed port assumed); failing that, it checks the environment variables, then the default installation directory and the npm/pnpm global bin. It stays in those usual spots — no whole-disk scans, no elevation (no sudo, no run-as-administrator). It confirms the install with `dsh plugin --profile web list` and then tells you dsh must be restarted before the plugin loads.
+At pnpm's `allowBuilds` gate, the agent reports the exact printed key without writing it into a file or bypassing the gate; npm or prebuilt release artifacts hitting this gate also count as suspicious. DSH lookup starts with the host and port in `$env:DSH_WEB_URL`, then PATH, the default installation directory, and npm/pnpm global bin. Only `dsh plugin` subcommands are invoked; no second instance is started for verification. After installation, the agent checks the target profile's `node_modules/.pnpm/lock.yaml` and installed-file hashes. A mismatch or failed installation stops the flow without uninstalling, reinstalling, or retrying.
 
 Whether it is sent is your Enter key. With no workspace yet, a notice at the top of the page says so up front, and the card's button becomes **Choose a folder and install** — one click opens the host's own directory picker, registers what you choose as a workspace, and goes on installing, instead of sending you to the sidebar and back to start over. Cancelling the picker is just a cancellation, not a failure.
 
@@ -86,7 +96,7 @@ A catalog row already installed into this profile is marked **Installed vX.Y.Z**
 
 The join is the installed package's `repository` field (every npm spelling is reduced to `owner/name`), because the catalog is keyed by GitHub repository while an install is keyed by package name, and the two are only sometimes spelled alike. A package that declares no repository falls back to matching its short name against the repository name — but only while that name picks out exactly one installed package: when two share it, neither claims the row, because an answer that depends on iteration order is worse than no answer.
 
-**The catalog carries no versions** (the upstream `market.json` records repository facts, not releases), so whether a newer version exists is something this plugin cannot compute locally — and does not guess. The upgrade prompt's first step is to have the agent establish the newest upstream version — the latest release tag, or the version the repository publishes to npm — and, **if it is not newer, say so and change nothing**; only a real update leads on to a full review of the new artifact — the same scan standard as a fresh install, not a diff-oriented review of what changed between versions. Upgrades install through the same ladder as fresh installs (npm / release tarball / commit-pinned source) and the same `allowBuilds` rules. As with install, the plugin runs no command itself.
+**The catalog carries no versions** (the upstream `market.json` records repository facts, not releases), so whether a newer version exists is something this plugin cannot compute locally — and does not guess. The upgrade prompt's first step is to have the agent establish the newest upstream version — the latest release tag, or the version the repository publishes to npm — and, **if it is not newer, say so and change nothing**; only a real update leads on to a review of the new artifact — the same scan standard as a fresh install, not a diff-oriented review of what changed between versions. Upgrades install through the same ladder as fresh installs (npm / release tarball / commit-pinned source) and the same `allowBuilds` rules. As with install, the plugin runs no command itself.
 
 ## The installed panel
 
@@ -142,7 +152,7 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 - **The plugin runs no install command and exposes no interface that could** — review and install are therefore inseparable;
 - **the market file is fetched and re-validated on the Host** before the browser sees it — a curated list of at most 300 rows, not the 2.4 MB crawl — and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (one 304, or the jsDelivr mirror when the default address is unreachable, or the last catalog when both are);
 - **repository links are rebuilt from `owner/name`** rather than trusted from the file, so a poisoned file cannot contribute a URL scheme of its own — the wire codec enforces the rebuilt shape, not just a comment;
-- **the default branch is pattern-checked before it reaches the prompt** (`[A-Za-z0-9][A-Za-z0-9._/-]*` plus the git ref rules; anything else falls back to `main`), and the prompt declares both the URL and the branch as opaque marketplace literals — a poisoned branch name cannot inject instructions into the review;
+- **prompts do not interpolate catalog branch names or free text**: only a validated repository URL, the target profile, and the installed package identity for upgrades;
 - **the configured profile name is pattern-checked too** (`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`): it is the one value that reaches the prompt as configuration rather than as catalog data, and it is interpolated into the `--profile` argument — a name outside that shape makes the market refuse to start rather than stage a command it cannot name;
 - every card renders as plain text;
 - while disabled, the Remote refuses — the catalog cannot be read around the switch;

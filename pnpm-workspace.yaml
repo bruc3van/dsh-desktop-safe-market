@@ -56,3 +56,4 @@ minimumReleaseAgeExclude:
   - '@deepseek-ai/dsh-commands@0.1.5-rc.1'
   - '@deepseek-ai/dsh-fs@0.1.5-rc.1'
   - '@deepseek-ai/dsh-sandbox@0.1.5-rc.1'
+  - '@deepseek-ai/dsh-client-ui-sidebar-right@0.1.5-rc.1'

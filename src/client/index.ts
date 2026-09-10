@@ -40,6 +40,7 @@ import { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 import { en, zh, type SafeMarketLocaleKey } from './locales.ts'
 import { adoptNavIcon } from './navIcon.ts'
 import { adoptStyles } from './styles.ts'
+import { registerMarketSidebar } from './sidebar.tsx'
 import {
   type MarketUiWorkspace,
   type MarketWorkspaces,
@@ -411,6 +412,23 @@ export function apply(ctx: ClientContext): void {
 
   const t = ctx.locale.bind(NS)
 
+  const injectMarket = (): MarketSectionInjected => ({
+    hooks: { scope },
+    setEnabled,
+    loadCatalog,
+    listSkills,
+    skillsSession,
+    install,
+    installIntoNewWorkspace,
+    chooseWorkspace,
+    workspaceReadiness,
+    listInstalled,
+    setInstalledEnabled,
+    uninstallInstalled,
+  })
+
+  registerMarketSidebar(ctx, injectMarket)
+
   // A section of its own rather than a tab inside the official Plugins page:
   // the settings shell hands every section a `close`, and closing is the
   // second half of the install hand-off (the prompt is staged in a session
@@ -423,19 +441,6 @@ export function apply(ctx: ClientContext): void {
     order: 60,
     label: () => t('nav'),
     locale: NS,
-    inject: (): MarketSectionInjected => ({
-      hooks: { scope },
-      setEnabled,
-      loadCatalog,
-      listSkills,
-      skillsSession,
-      install,
-      installIntoNewWorkspace,
-      chooseWorkspace,
-      workspaceReadiness,
-      listInstalled,
-      setInstalledEnabled,
-      uninstallInstalled,
-    }),
+    inject: injectMarket,
   }, MarketSection))
 }

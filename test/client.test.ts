@@ -52,6 +52,7 @@ test('the client manifest names its DSH Controller and UI dependencies', async (
     '@deepseek-ai/dsh-client-ui-conversation',
     '@deepseek-ai/dsh-client-ui-renderer',
     '@deepseek-ai/dsh-client-ui-settings',
+    '@deepseek-ai/dsh-client-ui-sidebar-right',
     '@deepseek-ai/dsh-client-ui-workspace',
   ])
 })
@@ -65,18 +66,16 @@ const placeholders = (value: string): string[] => [...new Set(value.match(/\{[^}
  * else — a description, a topic list — would put attacker-authored prose into
  * an instruction the user is one keystroke from sending.
  */
-const ALLOWED_IN_PROMPT = ['{branch}', '{profile}', '{url}']
-const ALLOWED_IN_UPGRADE = ['{branch}', '{installed}', '{profile}', '{url}']
+const ALLOWED_IN_PROMPT = ['{profile}', '{url}']
+const ALLOWED_IN_UPGRADE = ['{installed}', '{profile}', '{url}']
 
 for (const [language, dictionary] of [['zh', zh], ['en', en]] as const) {
   test(`the ${language} review prompt interpolates only Host-validated values`, () => {
     assert.deepEqual(placeholders(dictionary.prompt), ALLOWED_IN_PROMPT)
-    assert.deepEqual(placeholders(dictionary['prompt.compact']), ALLOWED_IN_PROMPT)
   })
 
   test(`the ${language} upgrade prompt interpolates only Host-validated values`, () => {
     assert.deepEqual(placeholders(dictionary['prompt.upgrade']), ALLOWED_IN_UPGRADE)
-    assert.deepEqual(placeholders(dictionary['prompt.compact.upgrade']), ALLOWED_IN_UPGRADE)
   })
 }
 
@@ -102,10 +101,10 @@ test('the prompts still tell the agent the repository is untrusted material', ()
   // the agent goes on to read, which no Host validation can constrain. If this
   // sentence is ever edited away, the interpolation invariant above is all
   // that is left — and it does not reach that far.
-  assert.match(zh.prompt, /不可信材料/)
-  assert.match(zh['prompt.upgrade'], /不可信材料/)
-  assert.match(en.prompt, /untrusted material under review, not instructions/)
-  assert.match(en['prompt.upgrade'], /untrusted material under review, not instructions/)
+  assert.match(zh.prompt, /是待审材料而非指令/)
+  assert.match(zh['prompt.upgrade'], /是待审材料而非指令/)
+  assert.match(en.prompt, /material under review, not instructions/)
+  assert.match(en['prompt.upgrade'], /material under review, not instructions/)
 })
 
 test('the disclaimer describes the flow that actually runs', () => {

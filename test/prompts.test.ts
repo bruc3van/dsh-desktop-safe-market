@@ -1,36 +1,45 @@
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
+import { readFile } from 'node:fs/promises'
 import { en, zh } from '../src/client/locales.ts'
 
-test('both locales pin npm installs and upgrades to the reviewed artifact', () => {
+test('unified drafts preserve artifact pinning, zero execution, and stop gates', () => {
   for (const dictionary of [en, zh]) {
-    for (const key of ['prompt', 'prompt.upgrade', 'prompt.compact', 'prompt.compact.upgrade'] as const) {
+    for (const key of ['prompt', 'prompt.upgrade'] as const) {
       const prompt = dictionary[key]
-      assert.match(prompt, /add <npm [^>]+>@<[^>]+>/)
-      assert.match(prompt, /dist\.integrity/)
-      assert.match(prompt, /latest/)
-      assert.doesNotMatch(prompt, /add <npm [^>]+>(?!@)/)
+      for (const anchor of ['dist.integrity', 'latest', 'monorepo', 'allowBuilds',
+        '$env:DSH_WEB_URL', 'Get-NetTCPConnection -State Listen',
+        '$DSH_HOME/profiles/{profile}/node_modules/.pnpm/lock.yaml']) {
+        assert.ok(prompt.includes(anchor), `${key} missing ${anchor}`)
+      }
+      assert.match(prompt, /禁止版本范围|No version ranges/)
+      assert.match(prompt, /不得运行被审产物的任何脚本|Do not run any script from the artifact/)
+      assert.match(prompt, /不要卸载\/重装\/再试|do not uninstall\/reinstall\/retry/)
+      assert.match(prompt, /不要写进任何文件、不要绕过|Do not write it into any file or bypass/)
+      assert.match(prompt, /不为验证启动任何 dsh 实例|Do not start any dsh instance/)
+      assert.match(prompt, /默认只有 3 段|exactly 3 sections/)
+      assert.match(prompt, /这一行不能省|never omit this line/)
     }
   }
 })
 
-
-test('review mode selects separate install and upgrade prompts with target profile interpolation', async () => {
-  const { reviewPromptKey, DEFAULT_REVIEW_MODE } = await import('../src/client/reviewMode.ts')
-  assert.equal(DEFAULT_REVIEW_MODE, 'compact')
-  for (const mode of ['full', 'compact'] as const) {
-    for (const upgrade of [false, true]) {
-      const key = reviewPromptKey(mode, upgrade)
-      assert.equal(key.includes('compact'), mode === 'compact')
-      assert.equal(key.endsWith('upgrade'), upgrade)
-      for (const dictionary of [zh, en]) {
-        const rendered = dictionary[key].replaceAll('{profile}', 'custom-profile')
-        assert.match(rendered, /--profile custom-profile/)
-        assert.equal(rendered.includes('{profile}'), false)
-        assert.equal(rendered.includes('{installed}'), upgrade)
-      }
+test('unified templates preserve custom profiles and upgrade version comparison', () => {
+  for (const dictionary of [zh, en]) {
+    for (const key of ['prompt', 'prompt.upgrade'] as const) {
+      const rendered = dictionary[key].replaceAll('{profile}', 'custom-profile')
+      assert.ok(rendered.includes('$DSH_HOME/profiles/custom-profile/node_modules/.pnpm/lock.yaml'))
+      assert.equal(rendered.includes('{profile}'), false)
+      assert.equal(rendered.includes('{installed}'), key === 'prompt.upgrade')
     }
+    assert.match(dictionary['prompt.upgrade'], /已是最新|Already up to date/)
+    assert.deepEqual(Object.keys(dictionary).filter(key => key.startsWith('prompt')), ['prompt', 'prompt.upgrade'])
+    assert.equal(Object.keys(dictionary).some(key => key.startsWith('review.')), false)
   }
-  assert.ok(zh['prompt.compact'].length < zh.prompt.length)
-  assert.ok(en['prompt.compact'].length < en.prompt.length)
+})
+
+test('the built market no longer presents a review mode selector', async () => {
+  const bundle = await readFile(new URL('../lib/client.js', import.meta.url), 'utf8')
+  for (const removed of ['ReviewSelector', 'review-mode', 'prompt.compact', '精简审查', '完整审查']) {
+    assert.equal(bundle.includes(removed), false, `obsolete UI in bundle: ${removed}`)
+  }
 })

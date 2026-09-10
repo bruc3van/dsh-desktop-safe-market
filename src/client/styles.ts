@@ -14,102 +14,19 @@ export const STYLE_ID = 'dsh-desktop-safe-market-style'
 
 /** The market tab's injected stylesheet text. */
 export const cssText = `
+.dsh_market_sidebar {
+  height: 100%;
+  min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 16px;
+}
 .dsh_market_section {
   display: flex;
   flex-direction: column;
   gap: 12px;
   max-width: 760px;
   color: var(--dsw-alias-label-primary);
-}
-.dsh_market_review {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--dsw-alias-border-l2);
-}
-.dsh_market_reviewText {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding-right: clamp(8px, 4vw, 48px);
-}
-.dsh_market_reviewTitle {
-  font-size: 14px;
-  font-weight: 400;
-  line-height: 22px;
-  color: var(--dsw-alias-label-primary);
-}
-.dsh_market_reviewDescription {
-  font-size: 12px;
-  font-weight: 400;
-  line-height: 18px;
-  overflow-wrap: anywhere;
-  color: var(--dsw-alias-label-tertiary);
-}
-.dsh_market_reviewSelector { position: relative; flex: none; }
-.dsh_market_reviewSelect {
-  appearance: none;
-  height: 36px;
-  padding: 0 40px 0 14px;
-  border: none;
-  border-radius: 18px;
-  background: var(--dsw-alias-bg-module-platform);
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 14px;
-  line-height: 22px;
-  cursor: pointer;
-}
-.dsh_market_reviewSelect:hover:not(:disabled) { background: var(--dsw-alias-interactive-bg-hover); }
-.dsh_market_reviewSelect:focus-visible {
-  outline: 2px solid var(--dsw-alias-state-business-primary);
-  outline-offset: 2px;
-}
-.dsh_market_reviewSelect:disabled { cursor: default; opacity: 0.5; }
-.dsh_market_reviewChevron {
-  position: absolute;
-  right: 14px;
-  top: 11px;
-  pointer-events: none;
-  color: var(--dsw-alias-label-primary);
-}
-.dsh_market_reviewMenu {
-  position: absolute;
-  z-index: 10;
-  top: calc(100% + 4px);
-  right: 0;
-  min-width: 216px;
-  max-width: calc(100vw - 32px);
-  padding: 8px;
-  border: 1px solid var(--dsw-alias-border-l2);
-  border-radius: 16px;
-  background: var(--dsw-alias-bg-layer-1);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.14);
-}
-.dsh_market_reviewOption {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 24px;
-  width: 100%;
-  padding: 10px 6px;
-  border: 0;
-  border-radius: 8px;
-  background: transparent;
-  color: var(--dsw-alias-label-primary);
-  font: inherit;
-  font-size: 14px;
-  line-height: 22px;
-  text-align: left;
-  cursor: pointer;
-}
-.dsh_market_reviewOption:hover,
-.dsh_market_reviewOption:focus-visible {
-  background: var(--dsw-alias-interactive-bg-hover);
-  outline: none;
 }
 .dsh_market_skillSource { overflow-wrap: anywhere; }
 .dsh_market_skillsTitle {

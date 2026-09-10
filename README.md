@@ -2,7 +2,7 @@
 
 **先审查，再安装。**
 
-市场顶部可切换「完整审查 / 精简审查」，用于新装、插件升级及市场自身升级；重新打开设置时默认精简审查。精简模式优先检查入口和敏感操作，发现疑点再深入，保留版本锁定、完整性校验和安装门禁。目标 profile 由 Host 返回并自动填入提示词，来源为插件的 `profile` 配置（默认 `web`），自定义部署需正确配置。
+新装、插件升级和市场自身升级使用统一的审查提示词：只审实际安装产物，审查期不执行产物脚本，锁定精确版本或 commit；遇到可疑内容、安装不一致或 build 门禁就停止并交由你决定。默认只报告结论、安装产物与完整性值、例外三段。目标 profile 由 Host 返回并自动填入提示词（默认 `web`）。
 
 中文 | [English](./README_EN.md)
 
@@ -16,7 +16,17 @@
 - **插件**：上方是**已安装面板**——列出当前 profile 通过包安装的插件及其运行状态，支持停用/启用和卸载；桌面客户端自动装进来的市场插件也列在这里，因为别处都移除不了它。DSH 自带的插件、以及没有归属标记的 in-box 接入不在此列。下方是精选市场，「全部插件」视图按 Star 数排名。
 - **技能**：列出当前会话实际能解析到的技能。
 
-![安全市场](./assets/screenshots/marketplace.png)
+## 两种查看方式
+
+**方式一：设置页。** 打开「设置」——>「安全市场」。
+
+![设置页中的安全市场](./assets/screenshots/marketplace.png)
+
+**方式二：右侧栏。** 打开一个会话，点击「打开右侧边栏」，在「开始」页选择「安全市场」，即可在侧栏标签页中浏览。下图左侧为入口，右侧为打开后的市场页面。
+
+![右侧栏的安全市场入口与市场标签页](./assets/screenshots/marketplace-sidebar.png)
+
+两种方式共用市场开关和操作逻辑。右侧栏入口需要 DSH 提供右侧 Sidebar 服务；没有该服务时，仍可从设置页查看。
 
 ## 它解决什么问题
 
@@ -41,7 +51,7 @@ dsh plugin --profile web add dsh-desktop-safe-market
 要锁到当前文档对应的那一版，用 GitHub release tarball：
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.0.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.1.tar.gz
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
@@ -50,9 +60,9 @@ dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market
 
 ### DSH 版本兼容
 
-Safe Market 0.5.0 的最低 DSH 版本为 **`0.1.5-rc.1`**，DSH peer 依赖与开发依赖均以该版本为基线。它直接使用拆分后的 Session/Workspace Controller、`uiWorkspace` 与新版 Settings Provider API。
+Safe Market 0.5.1 的最低 DSH 版本为 **`0.1.5-rc.1`**，DSH peer 依赖与开发依赖均以该版本为基线。它直接使用拆分后的 Session/Workspace Controller、`uiWorkspace` 与新版 Settings Provider API。
 
-这是有意的兼容性取舍：Safe Market 0.5.0 **不兼容 DSH 0.1.1 和 0.1.2 系列**，也不再包含旧版单体 `dsh-client-runtime` 的回退路径。仍在使用 0.1.1 的环境请保留 `dsh-desktop-safe-market@0.3.0`；仍在使用 0.1.2（最低 `0.1.2-alpha.3`）的环境请保留 `dsh-desktop-safe-market@0.4.3`。升级到 Safe Market 0.5.0 前，请先将 DSH 升级到 `0.1.5-rc.1`。
+这是有意的兼容性取舍：Safe Market 0.5.1 **不兼容 DSH 0.1.1 和 0.1.2 系列**，也不再包含旧版单体 `dsh-client-runtime` 的回退路径。仍在使用 0.1.1 的环境请保留 `dsh-desktop-safe-market@0.3.0`；仍在使用 0.1.2（最低 `0.1.2-alpha.3`）的环境请保留 `dsh-desktop-safe-market@0.4.3`。升级到 Safe Market 0.5.1 前，请先将 DSH 升级到 `0.1.5-rc.1`。
 
 ## 首次使用要手动开启
 
@@ -74,7 +84,7 @@ dsh plugin --profile web add <npm 包名@已审查的精确版本 | tarball URL 
 
 npm 路径会记录已审查的精确版本及 `dist.integrity`，校验 tarball 后按该版本安装，不重新解析 `latest`。
 
-从源码装会被 pnpm 的 `allowBuilds` 门禁拦下——这是「允许该仓库的代码在安装时于你的机器上执行」的授权，提示词要求 Agent 把 pnpm 打印的键原样交给你确认、写进 profile 的 `pnpm-workspace.yaml` 后再重跑。`dsh` 命令由 Agent 自己定位并执行，不需要你替它跑：最精确的是直接取正在运行的 dsh 进程（按进程名找——进程名不一定是 dsh，可能是 node 或客户端进程——不要假设固定端口）的可执行文件路径，找不到再依次查环境变量、默认安装目录与 npm/pnpm 全局 bin。全程只查这些常规位置，不做全盘扫描、不提权（sudo / 以管理员运行）。装完用 `dsh plugin --profile web list` 确认实际装的版本即可，然后告诉你重启 dsh 才会生效。
+遇到 pnpm `allowBuilds` 门禁时，Agent 只报告 pnpm 打印的确切键，不写入文件、不绕过；npm 包或 release 预构建产物触发门禁也视为可疑发现。定位 DSH 时，先通过 `$env:DSH_WEB_URL` 的主机端口反查监听进程，再查 PATH、默认安装目录和 npm/pnpm 全局 bin。只调用 `dsh plugin` 子命令，不为验证启动第二个实例。装完核对目标 profile 的 `node_modules/.pnpm/lock.yaml` 与落地文件哈希；不一致或安装失败时保持现状，不自行卸载、重装或重试。
 
 发不发送由你按回车决定。还没有任何工作区时，页面顶部会先说明这个前提，卡片上的按钮也变成「选择文件夹并安装」——点一下直接开系统目录选择器，选完就地注册成工作区并继续安装，不用中途跑去侧边栏再回来重来一遍。取消选择只是取消，不算失败。
 
@@ -86,7 +96,7 @@ npm 路径会记录已审查的精确版本及 `dist.integrity`，校验 tarball
 
 认亲靠的是已安装包 `package.json` 里的 `repository` 字段（各种写法都会归约成 `owner/name`），因为目录是按 GitHub 仓库编排的，而安装是按包名编排的，两者只是有时拼写相同。没写 `repository` 的包退回「包短名 ≈ 仓库名」的猜测，且仅在该短名只对应一个已装包时才算数——两个包重名时宁可都不标，也不能让结论取决于遍历顺序。
 
-**目录里没有版本号**（上游 `market.json` 只收录仓库事实，不收录发布版本），所以「有没有新版」这件事插件本地算不出来，也不去猜：升级提示词的第一步就是让 Agent 去确认上游最新版本——release tag，或该仓库发布到 npm 的版本——**不比当前新就直接回「已是最新」、不做任何改动**；确有新版才继续完整审查新版产物——与全新安装同一套扫描标准，不做两版 diff 的定向审查。升级的安装方式与全新安装是同一套优先级（npm / release tarball / 锁 commit 的源码）与 `allowBuilds` 规则。和安装一样，插件自己不执行任何命令。
+**目录里没有版本号**（上游 `market.json` 只收录仓库事实，不收录发布版本），所以「有没有新版」这件事插件本地算不出来，也不去猜：升级提示词的第一步就是让 Agent 去确认上游最新版本——release tag，或该仓库发布到 npm 的版本——**不比当前新就直接回「已是最新」、不做任何改动**；确有新版才继续审查新版产物——与全新安装同一套扫描标准，不做两版 diff 的定向审查。升级的安装方式与全新安装是同一套优先级（npm / release tarball / 锁 commit 的源码）与 `allowBuilds` 规则。和安装一样，插件自己不执行任何命令。
 
 ## 已安装面板
 
@@ -142,7 +152,7 @@ npm 路径会记录已审查的精确版本及 `dist.integrity`，校验 tarball
 - **插件自身不执行任何安装命令**，也没有能执行它的接口——审查与安装因此不可分割；
 - **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选后的至多 300 行，而不是 2.4 MB 爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；默认地址连不上时自动改用 jsDelivr 镜像，两边都连不上才用上次的目录）；
 - **仓库链接由 `owner/name` 重新拼装**，不采信文件里的地址，因此被投毒的文件无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
-- **默认分支名进提示词前经过模式校验**（`[A-Za-z0-9][A-Za-z0-9._/-]*` 加 git ref 规则，不合格一律回落 `main`），提示词同时声明 URL 与分支为市场提供的不透明字面量——被投毒的分支名无法向审查提示词注入指令；
+- **提示词不插入目录中的分支名或自由文本**：只填入经校验的仓库 URL、目标 profile，以及升级时的已安装包标识；
 - **配置的 profile 名同样要过形状校验**（`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`）：它是唯一一个以配置身份进入提示词的值，会拼进 `--profile` 参数；不合格时插件直接拒绝启动，而不是发出一条自己都说不清目标的命令；
 - 卡片全部以纯文本渲染；
 - 关闭状态下 Remote 接口直接拒绝，无法绕过开关读取目录；
