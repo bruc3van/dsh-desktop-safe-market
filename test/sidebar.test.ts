@@ -11,9 +11,50 @@ const result = await build({
   entryPoints: [fileURLToPath(new URL('../src/client/sidebar.tsx', import.meta.url))],
   bundle: true, write: false, platform: 'node', format: 'esm',
 })
-const { registerMarketSidebar, MarketSidebar, MARKET_TAB_ID } = await import(
+const { registerMarketNavigation, MarketMain, registerMarketSidebar, MarketSidebar, MARKET_TAB_ID } = await import(
   `data:text/javascript;base64,${Buffer.from(result.outputFiles[0].text).toString('base64')}`
 )
+
+test('left navigation pairs its destination, returns to conversation, and cleans up on service loss', async () => {
+  const ctx = new Context()
+  const entries = new Map()
+  const face = { loadCatalog: () => undefined }
+  let selected = MARKET_TAB_ID
+  let dictionary = zh
+  ctx.provide('locale', { bind: () => (key: keyof typeof zh) => dictionary[key] })
+  ctx.provide('slots', {
+    inject: (_name: string, register: () => () => void) => register(),
+    register: (entry: { name: string; id?: string; key?: string }, component: unknown) => {
+      if (entry.name === 'sidebar.panellist') assert.ok(entries.has('main'))
+      entries.set(entry.name, { entry, component })
+      return () => entries.delete(entry.name)
+    },
+  })
+  const feature = ctx.plugin((scope: Context) => registerMarketNavigation(scope, () => face))
+  await feature.await()
+  assert.equal(entries.size, 0)
+  const provider = ctx.plugin((scope: Context) => scope.provide('layout', {
+    selectPanel: (id: string | null) => { selected = id },
+  }))
+  await provider.await()
+  await setImmediate()
+  const row = entries.get('sidebar.panellist').entry
+  const main = entries.get('main')
+  assert.equal(row.id, MARKET_TAB_ID)
+  assert.equal(main.entry.key, row.id)
+  assert.equal(row.label(), '安全市场')
+  dictionary = en
+  assert.equal(row.label(), 'Safe Market')
+  assert.equal(main.component, MarketMain)
+  const page = MarketMain(main.entry.inject())
+  assert.equal(page.props.children.props.loadCatalog, face.loadCatalog)
+  page.props.children.props.close()
+  assert.equal(selected, null)
+  await provider.dispose()
+  await setImmediate()
+  assert.equal(entries.size, 0)
+  await feature.dispose()
+})
 
 test('sidebar registration waits for its service, shares the face, and follows plugin lifetime', async () => {
   const ctx = new Context()

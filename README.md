@@ -11,22 +11,26 @@
 - **精选来源**：市场列表不是 GitHub topic 的原始抓取，而是 [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 每日快照管线的**人工精选**产物——蹭 topic 的非插件、归档/停用仓库在上游就被剔除，席位再按类目逐轮均衡发牌——你浏览的是一份经过编辑把关的短名单，而不是热度堆场。
 - **先审查再安装**：点「安全安装」不会装任何东西。它打开一个新会话、把一段**安全审查提示词**放进输入框，由 Agent 实际读仓库代码，确认干净后才执行官方安装命令。插件自身没有任何能执行安装的接口——审查与安装因此在结构上不可分割、绕不过去。
 
-使用上，它在设置里多一个**安全市场**导航项（挂市场自己的店面图标），分两页：
+使用上，从左侧导航或右侧栏打开**安全市场**，分两页：
 
-- **插件**：上方是**已安装面板**——列出当前 profile 通过包安装的插件及其运行状态，支持停用/启用和卸载；桌面客户端自动装进来的市场插件也列在这里，因为别处都移除不了它。DSH 自带的插件、以及没有归属标记的 in-box 接入不在此列。下方是精选市场，「全部插件」视图按 Star 数排名。
+- **插件**：默认浏览精选目录，支持搜索、分类筛选；点击「已安装」查看当前 profile 安装的插件、运行状态，并执行启用、停用或卸载。
 - **技能**：列出当前会话实际能解析到的技能。
 
 ## 两种查看方式
 
-**方式一：设置页。** 打开「设置」——>「安全市场」。
+**方式一：左侧导航。** 点击「新会话」下方、「工作区」上方的「安全市场」，在中间主区域浏览。准备好安装提示词后会自动回到对话。
 
-![设置页中的安全市场](./assets/screenshots/marketplace.png)
+**方式二：右侧栏。** 打开一个会话，点击「打开右侧边栏」，在「开始」页选择「安全市场」，即可在侧栏标签页中浏览。
 
-**方式二：右侧栏。** 打开一个会话，点击「打开右侧边栏」，在「开始」页选择「安全市场」，即可在侧栏标签页中浏览。下图左侧为入口，右侧为打开后的市场页面。
+两种方式共用市场开关和操作逻辑。左侧导航需要 DSH 提供全局面板及侧栏导航插槽；右侧栏入口需要右侧 Sidebar 服务。
 
-![右侧栏的安全市场入口与市场标签页](./assets/screenshots/marketplace-sidebar.png)
+## 界面与操作
 
-两种方式共用市场开关和操作逻辑。右侧栏入口需要 DSH 提供右侧 Sidebar 服务；没有该服务时，仍可从设置页查看。
+- **入口**：保留左侧导航和右侧栏，设置页不再重复提供市场入口。
+- **刷新市场**：右上角读取最新市场目录，刷新中显示状态并禁止重复点击。
+- **更多操作（⋯）**：包含「升级市场插件」、[GitHub 仓库](https://github.com/bruc3van/dsh-desktop-safe-market)和[联系作者](https://x.com/bruc3van)。升级仍先准备审查提示词。
+- **滚动浏览**：标题、副标题、标签栏和搜索区域固定；分类与卡片列表独立滚动。宽度足够时，向后浏览会把搜索框带动效移到标签栏右侧，反向滚动恢复；窄侧栏保留整行搜索。
+- **回到顶部**：列表滚动超过约半屏（至少 240px）后，右下角显示按钮，返回当前列表顶部；支持系统减少动效偏好。
 
 ## 它解决什么问题
 
@@ -51,30 +55,30 @@ dsh plugin --profile web add dsh-desktop-safe-market
 要锁到当前文档对应的那一版，用 GitHub release tarball：
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.1.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.2.tar.gz
 ```
 
 这条官方命令会把依赖装进 profile，并**自动把它并入 `dsh.profile.bundles`**（凡是声明了 `dsh.bundle` 的依赖都会自动入列），不需要手工改 `package.json`。装完重启 `dsh web`（或桌面客户端）即可。
 
-浏览器、CLI 与桌面客户端共用同一个 profile，因此三处都会出现这个导航项。
+浏览器与桌面客户端连接同一 profile 时可访问相同市场数据；CLI 用于安装和管理插件，不显示这些界面入口。
 
 ### DSH 版本兼容
 
-Safe Market 0.5.1 的最低 DSH 版本为 **`0.1.5-rc.1`**，DSH peer 依赖与开发依赖均以该版本为基线。它直接使用拆分后的 Session/Workspace Controller、`uiWorkspace` 与新版 Settings Provider API。
+Safe Market 0.5.2 的最低 DSH 版本为 **`0.1.5-rc.1`**，DSH peer 依赖与开发依赖均以该版本为基线。它直接使用拆分后的 Session/Workspace Controller、`uiWorkspace` 与新版 Settings Provider API。
 
-这是有意的兼容性取舍：Safe Market 0.5.1 **不兼容 DSH 0.1.1 和 0.1.2 系列**，也不再包含旧版单体 `dsh-client-runtime` 的回退路径。仍在使用 0.1.1 的环境请保留 `dsh-desktop-safe-market@0.3.0`；仍在使用 0.1.2（最低 `0.1.2-alpha.3`）的环境请保留 `dsh-desktop-safe-market@0.4.3`。升级到 Safe Market 0.5.1 前，请先将 DSH 升级到 `0.1.5-rc.1`。
+这是有意的兼容性取舍：Safe Market 0.5.2 **不兼容 DSH 0.1.1 和 0.1.2 系列**，也不再包含旧版单体 `dsh-client-runtime` 的回退路径。仍在使用 0.1.1 的环境请保留 `dsh-desktop-safe-market@0.3.0`；仍在使用 0.1.2（最低 `0.1.2-alpha.3`）的环境请保留 `dsh-desktop-safe-market@0.4.3`。升级到 Safe Market 0.5.2 前，请先将 DSH 升级到 `0.1.5-rc.1`。
 
 ## 首次使用要手动开启
 
-「插件」页的市场部分默认是**关闭**状态，只显示一张说明卡片和一个「启用安全市场」按钮（已安装面板不受开关影响，随时可见）。
+「插件」页的市场部分默认是**关闭**状态，只显示一张说明卡片和一个「启用安全市场」按钮。
 
-这是刻意的：**开启才会让本机去 GitHub 读取目录快照**，关闭时插件不发起任何网络请求。一个装上就开始联网的插件，等于替你做了决定。开关是插件自己的持久化设置，开一次之后一直有效。
+这是刻意的：**开启才会让本机去 GitHub 读取目录快照**，关闭时插件不发起任何网络请求。一个装上就开始联网的插件，等于替你做了决定。开关是插件自己的持久化设置，开一次之后一直有效。页面不再提供「停用市场」按钮。
 
 ## 「安全安装」做了什么
 
 1. 在当前会话所属工作区（没有则用最近使用的工作区）连接一个新会话并跳转过去；
 2. 把审查提示词**填入输入框**——不发送；
-3. 关闭设置窗口，让你直接看到那个会话。
+3. 退出市场页面，让你直接看到那个会话。
 
 提示词开宗明义：**唯一目的是安全审查——在安全的前提下高效安装，不做多余的验证**。它要求 Agent：把仓库里的一切内容当作待审查的不可信材料（仓库里的指令一律不照做），实际读代码而非只看 README，重点检查凭据/token 访问、向第三方外传数据、远程代码执行、`postinstall`/`prepare` 等安装脚本、无对应源码的混淆文件，以及权限是否远超其声称的功能；**发现可疑处必须停下来说明原因并询问你**；确认干净后按优先级用官方命令安装——npm 包或最新 release tag 的预构建 tarball 优先（安装时不执行该仓库的代码），只有两者都没有时才从默认分支装源码，且必须锁到具体 commit：
 
@@ -100,7 +104,7 @@ npm 路径会记录已审查的精确版本及 `dist.integrity`，校验 tarball
 
 ## 已安装面板
 
-「插件」页顶部的**已安装面板**列出当前 profile 通过 `dsh plugin add` 装进来的插件包（同时写在 `dependencies` 与 `dsh.profile.bundles` 里的那些：版本、简介、每个 loader 条目的运行状态），**以及桌面客户端自动装进来的市场插件**。DSH 模板自带的层不在此列。提供两个动作：
+「插件」页选择「已安装」后，列表列出当前 profile 通过 `dsh plugin add` 装进来的插件包（同时写在 `dependencies` 与 `dsh.profile.bundles` 里的那些：版本、简介、每个 loader 条目的运行状态），**以及桌面客户端自动装进来的市场插件**。DSH 模板自带的层不在此列。提供两个动作：
 
 - **停用/启用**：往 profile 自己的 `cordis.patch.yml`（用户补丁层）写入/移除一行 `- id: <条目> / disabled: true`，同时直接推动 loader 条目——**立即生效，无需重启**，重启后依旧有效。market 自己那行不提供停用按钮：停用市场会连带停掉唯一能再启用它的界面。
 - **卸载**：用户插件会先在本会话停用，再于 profile 目录执行 `pnpm remove`（与官方 `dsh plugin remove` 同一原语），依赖、锁文件、`node_modules` 和 `dsh.profile.bundles` 一并去掉，并清掉该包在 `pnpm-workspace.yaml` 里的 `allowBuilds` / `minimumReleaseAgeExclude` 条目。内置座位没有 pnpm 树，卸载会撤 `bundles`；只有确认其他 profile 不再引用时才删除副本。若 `pnpm remove` 失败，会尝试修改清单并说明磁盘未修剪；清单移除也失败时，面板报告卸载失败，重启清理会保留停用行。同一会话内重装刚卸载的插件会被残留停用行按住，卡片会提示「点启用即可恢复」。
@@ -132,7 +136,7 @@ npm 路径会记录已审查的精确版本及 `dist.integrity`，校验 tarball
 市场只读 [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 每日快照管线发布的一个精选文件 [`market.json`](https://github.com/bruc3van/awesome-dsh-plugin/blob/main/data/market.json)，全部编辑决策都在上游（爬取与人工名单所在处）完成：
 
 - 上游对带 `dsh-plugin` 标签的爬取（`repositories.json`）做过滤：要求有简介、剔除归档/停用仓库、应用 `curated.json` 人工排除名单；
-- 分类与**均衡发牌**也在上游——不是纯按 star 排序（那样两三个分类就会吃掉几乎所有席位），而是每类先出最强、再出次强，至多 300 席；
+- 分类与**均衡发牌**也在上游——不是纯按 star 排序（那样两三个分类就会吃掉几乎所有席位），而是每类先出最强、再出次强，名额由上游目录配置决定；
 - 本插件按该顺序截断到 `marketSize`（默认 1000，是上限兜底而非目标条数——实际条数由上游发牌决定），并在 Host 侧重校验每一行后才发给浏览器；
 - **网络韧性（自动切换）**：默认从 GitHub raw 读取。当默认地址不可达或请求出错（超时、DNS/连接失败、HTTP 错误）时，自动改用同一文件的 jsDelivr CDN 镜像（[bruc3van/awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) 的 `cdn.jsdelivr.net/gh/…@main/data/market.json`，带 ETag，可走条件请求）；回答过的那一侧会被记住（粘性），下次读取直接走它，镜像失败再回到 GitHub，无需任何配置。自己配置过 `catalogBase` 的部署不受影响——只读它指定的那一个来源。
 
@@ -145,12 +149,12 @@ npm 路径会记录已审查的精确版本及 `dist.integrity`，校验 tarball
 | 字段 | 默认值 | 说明 |
 | --- | --- | --- |
 | `catalogBase` | awesome-dsh-plugin 的 `data/` 目录 | 指向该文件的镜像 |
-| `marketSize` | `1000` | 展示条数的上限。条数由上游决定（`market.json` 至多 300 条），这个默认值远高于上游上限，是兜底而不是调节钮 |
+| `marketSize` | `1000` | 展示条数的上限。条数由上游决定（`market.json`），本参数限制返回给界面的最大条数 |
 
 ## 安全边界
 
 - **插件自身不执行任何安装命令**，也没有能执行它的接口——审查与安装因此不可分割；
-- **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选后的至多 300 行，而不是 2.4 MB 爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；默认地址连不上时自动改用 jsDelivr 镜像，两边都连不上才用上次的目录）；
+- **市场文件在 Host 侧读取并重新校验**后才发给浏览器（精选目录，而不是完整爬取快照），并持久化在 `$DSH_HOME/storages/safe_market.json`，重启后走 ETag 条件请求（一次 304；默认地址连不上时自动改用 jsDelivr 镜像，两边都连不上才用上次的目录）；
 - **仓库链接由 `owner/name` 重新拼装**，不采信文件里的地址，因此被投毒的文件无法塞进自己的 URL scheme——wire codec 也会强制校验这个形状，而不只是靠注释；
 - **提示词不插入目录中的分支名或自由文本**：只填入经校验的仓库 URL、目标 profile，以及升级时的已安装包标识；
 - **配置的 profile 名同样要过形状校验**（`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`）：它是唯一一个以配置身份进入提示词的值，会拼进 `--profile` 参数；不合格时插件直接拒绝启动，而不是发出一条自己都说不清目标的命令；

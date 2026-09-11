@@ -11,22 +11,26 @@ A **review-before-install** extension marketplace for the DeepSeek Harness web G
 - **A curated source.** The list is not a raw crawl of the `dsh-plugin` topic. It is the daily, human-curated output of the [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin) snapshot pipeline — topic riders, archived and disabled repositories are removed upstream, and entries are dealt round by round across categories — so what you browse is an editorially filtered shortlist, never a popularity dump.
 - **Review before install.** The install button installs nothing. It opens a new session and stages a **security-review prompt**; an agent reads the repository's actual code, and only a clean reading proceeds to the official install command. The plugin itself has no interface that could run an install — review and install are inseparable by construction.
 
-In use, it adds a **Safe Market** entry to the Settings navigation (wearing the market's own storefront icon), with two pages:
+Open **Safe Market** from the left navigation or right sidebar, with two pages:
 
-- **Plugins** — an **installed panel** on top: the plugin packages installed into this profile as dependencies, with their live state, each disableable/enableable and uninstallable; the marketplace plugin the desktop client placed is listed here too, because nowhere else can remove it. Layers shipped with DSH, and in-box bundles carrying no ownership marker, are not listed. Below it, the curated market, whose **All plugins** view ranks by stars.
+- **Plugins** — browse the curated catalog with search and category filters. Select **Installed** to view profile-installed packages and their runtime state, and enable, disable, or uninstall them.
 - **Skills** — what the current session can actually resolve.
 
 ## Two ways to browse
 
-**Option 1: Settings.** Open Settings → Safe Market.
+**Option 1: Left navigation.** Click Safe Market below New Session and above Workspaces to browse in the main area. Preparing an install prompt returns you to the conversation.
 
-![Safe Market in Settings](./assets/screenshots/marketplace.png)
+**Option 2: Right sidebar.** Open a session, expand the right sidebar, and choose Safe Market on the Start page to browse in a sidebar tab.
 
-**Option 2: Right sidebar.** Open a session, expand the right sidebar, and choose Safe Market on the Start page to browse in a sidebar tab. The screenshot shows the entry on the left and the open market page on the right.
+Both views share the market switch and operations. Left navigation requires DSH's global panel and sidebar navigation slots; the right sidebar entry requires the right Sidebar service.
 
-![Safe Market entry and market tab in the right sidebar](./assets/screenshots/marketplace-sidebar.png)
+## Interface and controls
 
-Both views share the market switch and operations. The sidebar entry requires DSH's right Sidebar service; Settings remains available without it.
+- **Navigation:** left navigation and the right sidebar remain; the duplicate Settings entry has been removed.
+- **Refresh market:** the upper-right action fetches the latest catalog, shows progress, and prevents repeated clicks while refreshing.
+- **More actions (⋯):** upgrade the market plugin through the review-prompt flow, open the [GitHub repository](https://github.com/bruc3van/dsh-desktop-safe-market), or [contact the author](https://x.com/bruc3van).
+- **Scrolling:** the heading, subtitle, tabs, and search remain visible while categories and cards scroll independently. In wide panels, browsing forward animates search into the right end of the tab row; reverse scrolling restores it. Narrow sidebars keep the full-row search.
+- **Back to top:** after roughly half a screen (at least 240px), a lower-right button returns the current list to the top. Reduced-motion preferences are respected.
 
 ## What it is for
 
@@ -51,7 +55,7 @@ Install DSH Safe Market for me: run the official command `dsh plugin --profile w
 To pin the version this document names, use the GitHub release tarball:
 
 ```sh
-dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.1.tar.gz
+dsh plugin --profile web add https://github.com/bruc3van/dsh-desktop-safe-market/archive/refs/tags/v0.5.2.tar.gz
 ```
 
 The official command installs the dependency into the profile and **joins it into `dsh.profile.bundles` by itself** (any dependency declaring `dsh.bundle` is reconciled into the layer stack), so there is no `package.json` to edit. Restart `dsh web` (or the desktop client) afterwards.
@@ -60,21 +64,21 @@ The browser, the CLI, and the desktop client share one profile, so the entry app
 
 ### DSH version compatibility
 
-Safe Market 0.5.1 requires at least **DSH `0.1.5-rc.1`**, with DSH peer and development dependencies aligned to that baseline. It directly uses the split Session/Workspace Controllers, `uiWorkspace`, and the new Settings Provider API.
+Safe Market 0.5.2 requires at least **DSH `0.1.5-rc.1`**, with DSH peer and development dependencies aligned to that baseline. It directly uses the split Session/Workspace Controllers, `uiWorkspace`, and the new Settings Provider API.
 
-This is an intentional compatibility trade-off: Safe Market 0.5.1 **does not support the DSH 0.1.1 or 0.1.2 lines** and no longer includes a fallback to the monolithic `dsh-client-runtime`. Environments that remain on 0.1.1 should keep `dsh-desktop-safe-market@0.3.0`; environments on 0.1.2 (at least `0.1.2-alpha.3`) should keep `dsh-desktop-safe-market@0.4.3`. Upgrade DSH to `0.1.5-rc.1` before upgrading to Safe Market 0.5.1.
+This is an intentional compatibility trade-off: Safe Market 0.5.2 **does not support the DSH 0.1.1 or 0.1.2 lines** and no longer includes a fallback to the monolithic `dsh-client-runtime`. Environments that remain on 0.1.1 should keep `dsh-desktop-safe-market@0.3.0`; environments on 0.1.2 (at least `0.1.2-alpha.3`) should keep `dsh-desktop-safe-market@0.4.3`. Upgrade DSH to `0.1.5-rc.1` before upgrading to Safe Market 0.5.2.
 
 ## You turn it on yourself
 
-The **market half** of the Plugins page ships **off**. Until you enable it, it is one card explaining what enabling does, and a button (the installed panel answers either way).
+The **market half** of the Plugins page ships **off**. Until you enable it, it is one card explaining what enabling does, and a button.
 
-That is deliberate: **enabling is what lets this machine read the catalog snapshot from GitHub**, and while it is off the plugin makes no network request at all. A plugin that arrives already reaching out has decided something on your behalf. The switch is the plugin's own durable setting — answer once and it stays answered.
+That is deliberate: **enabling is what lets this machine read the catalog snapshot from GitHub**, and while it is off the plugin makes no network request at all. A plugin that arrives already reaching out has decided something on your behalf. The switch is the plugin's own durable setting — answer once and it stays answered. The page no longer offers a Disable Market button.
 
 ## What "Review and install" does
 
 1. connects a new session in the current session's workspace (or the most recently used one) and navigates there;
 2. **stages** the review prompt in the composer — it does not send it;
-3. closes Settings, so you are looking at the session it was staged in.
+3. leaves the market page so you can see the session containing the draft.
 
 The prompt opens by stating its scope: **the only purpose is the security review — install efficiently once the code is clean, with no extra verification**. It asks the agent to treat everything in the repository as untrusted material under review (instructions found there are never followed), to read the code rather than the README, and to look for credential or token access, data sent to third-party hosts, remote code execution or downloaded-and-executed payloads, install-time scripts (`postinstall`, `prepare`, and friends), obfuscated sources with no matching original, and permissions far wider than the plugin claims. **Anything suspicious means stop, explain, and ask you.** A clean reading is followed by the official command, by priority — the npm package or the latest release tag's prebuilt tarball first (no repository code runs at install time), and only failing both, source from the default branch pinned to an exact commit:
 
@@ -100,7 +104,7 @@ The join is the installed package's `repository` field (every npm spelling is re
 
 ## The installed panel
 
-The **installed panel** at the top of the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry — **and the marketplace plugin the desktop client placed**. Layers shipped with the DSH profile template are not listed. Two actions:
+The **Installed** filter on the Plugins page lists the packages this profile gained through `dsh plugin add` (names that sit in both `dependencies` and `dsh.profile.bundles`) — version, description, the live state of each loader entry — **and the marketplace plugin the desktop client placed**. Layers shipped with the DSH profile template are not listed. Two actions:
 
 - **Disable/enable** writes (or removes) a `- id: <entry>` / `disabled: true` row in the profile's own `cordis.patch.yml` (the user patch layer) and nudges the loader entry directly — **effective immediately, no restart**, and durable across restarts. The market's own row has no disable button: disabling the market would take down the only surface that could re-enable it.
 - **Uninstall** stops a user plugin for this session, then runs `pnpm remove` in the profile directory (the same primitive official `dsh plugin remove` forwards to), so the dependency, lockfile, `node_modules`, and `dsh.profile.bundles` entry go together, along with that package's leftover `allowBuilds` / `minimumReleaseAgeExclude` rows in `pnpm-workspace.yaml`. An in-box seat has no pnpm tree: uninstall drops the `bundles` entry and deletes the marked copy only when no other profile references it. If `pnpm remove` fails, the manager attempts manifest removal and reports the prune fault. If manifest removal also fails, the panel reports failure and the boot sweep preserves the stop rows. A plugin uninstalled and reinstalled within one session is held down by leftover stop rows, and its card explains that Enable will clear them.
@@ -132,7 +136,7 @@ Addressing it by session is required, not lazy: the skill registry is host+per-s
 The market reads a single published file, [`market.json`](https://github.com/bruc3van/awesome-dsh-plugin/blob/main/data/market.json), from [awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin)'s daily snapshot pipeline. Every editorial decision happens upstream, where the crawl and the human curation live:
 
 - the crawl of repositories tagged `dsh-plugin` (`repositories.json`) is filtered there — a description is required, archived/disabled repositories are dropped, and the exclusions in `curated.json` are applied;
-- rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every slot to two or three categories), but entries dealt round by round so every category places its best entry before any places its second, up to 300;
+- rows are categorized and **balanced** there — not a straight star ranking (that would hand almost every slot to two or three categories), but entries dealt round by round so every category places its best entry before any places its second, with capacity configured upstream;
 - this plugin truncates that order to `marketSize` (default 1000 — a ceiling, not a target: upstream's deal decides the actual count) and re-validates every row on the Host before the browser sees it;
 - **network resilience (automatic failover)**: the default read comes from GitHub raw. When the default address cannot answer (timeout, DNS/connection failure, or an HTTP error), the read automatically falls over to the jsDelivr CDN mirror of the same published file ([bruc3van/awesome-dsh-plugin](https://github.com/bruc3van/awesome-dsh-plugin)'s `cdn.jsdelivr.net/gh/…@main/data/market.json`, which answers with an ETag so the conditional request still works). The side that answered is remembered (sticky) and tried first next time, falling back the other way if it later fails — no configuration needed. A deployment with its own `catalogBase` keeps exactly that one source.
 
@@ -145,12 +149,12 @@ Override in `~/.dsh/profiles/web/cordis.patch.yml`:
 | Field | Default | Meaning |
 | --- | --- | --- |
 | `catalogBase` | awesome-dsh-plugin's `data/` directory | Point the market at a mirror of the same file |
-| `marketSize` | `1000` | Ceiling on the rows shown. Upstream sets the count (`market.json` publishes at most 300); the default sits well above that cap as a backstop, not as a dial to tune |
+| `marketSize` | `1000` | Ceiling on the rows shown. Upstream supplies the catalog in `market.json`; this parameter caps the rows returned to the UI |
 
 ## Security boundary
 
 - **The plugin runs no install command and exposes no interface that could** — review and install are therefore inseparable;
-- **the market file is fetched and re-validated on the Host** before the browser sees it — a curated list of at most 300 rows, not the 2.4 MB crawl — and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (one 304, or the jsDelivr mirror when the default address is unreachable, or the last catalog when both are);
+- **the market file is fetched and re-validated on the Host** before the browser sees it — the curated catalog rather than the full crawl — and persisted at `$DSH_HOME/storages/safe_market.json` so a restart asks conditionally (one 304, or the jsDelivr mirror when the default address is unreachable, or the last catalog when both are);
 - **repository links are rebuilt from `owner/name`** rather than trusted from the file, so a poisoned file cannot contribute a URL scheme of its own — the wire codec enforces the rebuilt shape, not just a comment;
 - **prompts do not interpolate catalog branch names or free text**: only a validated repository URL, the target profile, and the installed package identity for upgrades;
 - **the configured profile name is pattern-checked too** (`[A-Za-z0-9][A-Za-z0-9._-]{0,63}`): it is the one value that reaches the prompt as configuration rather than as catalog data, and it is interpolated into the `--profile` argument — a name outside that shape makes the market refuse to start rather than stage a command it cannot name;

@@ -86,7 +86,7 @@ export const zh = {
   'tabs.aria': '安全市场分区',
 
   'intro.title': '安全市场',
-  'intro.slogan': '先审查，再安装。',
+  'intro.slogan': '主打安全，提倡先审查再安装的 DeepSeek Harness 市场。深度扫描 5 分钟，放心使用每一天。',
   'intro.body': '社区插件来自 awesome-dsh-plugin，每日更新，启用后联网读取目录。点击「安全安装」生成审查提示词，由你发送后交给 Agent 审查：有疑点先询问，通过后安装并报告。收录和审查均不保证安全。',
   'intro.enable': '启用安全市场',
   'intro.enabling': '正在启用…',
@@ -97,7 +97,7 @@ export const zh = {
 
   'search': '搜索插件名称、简介或分类',
   'all': '全部',
-  'refresh': '刷新',
+  'refresh': '刷新市场',
   'refreshing': '刷新中…',
   'loading': '正在读取社区插件目录，请稍候…',
   'empty': '没有符合当前筛选的插件',
@@ -111,7 +111,11 @@ export const zh = {
 
   'install': '安全安装',
   'upgrade': '安全升级',
-  'self.upgrade': '安全升级市场',
+  'self.upgrade': '升级市场插件',
+  'header.more': '更多操作',
+  'backToTop': '回到顶部',
+  'header.repository': 'GitHub 仓库',
+  'header.contact': '联系作者',
   'installedHere': '已安装 v{version}',
   'installedHereUnknown': '已安装',
   'installing': '正在打开会话…',
@@ -258,7 +262,7 @@ Currently installed: {installed}. First check for a newer upstream version; if i
 
   'search': 'Search plugins by name, description, or category',
   'all': 'All',
-  'refresh': 'Refresh',
+  'refresh': 'Refresh market',
   'refreshing': 'Refreshing…',
   'loading': 'Loading the community catalog — this can take a moment…',
   'empty': 'No plugin matches this filter',
@@ -272,7 +276,11 @@ Currently installed: {installed}. First check for a newer upstream version; if i
 
   'install': 'Review and install',
   'upgrade': 'Review and upgrade',
-  'self.upgrade': 'Review and upgrade market',
+  'self.upgrade': 'Upgrade market plugin',
+  'header.more': 'More actions',
+  'backToTop': 'Back to top',
+  'header.repository': 'GitHub repository',
+  'header.contact': 'Contact author',
   'installedHere': 'Installed v{version}',
   'installedHereUnknown': 'Installed',
   'installing': 'Opening a session…',

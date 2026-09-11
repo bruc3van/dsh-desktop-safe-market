@@ -1,7 +1,6 @@
 import type { SkillsSessionSource } from './skillsSubscription.ts';
 /**
- * The Marketplace settings section: its own entry in the Settings navigation,
- * with two pages of its own.
+ * The shared Marketplace surface, with Plugins and Skills pages.
  *
  * **Plugins** is the community shortlist. While the market is off it is one
  * card that says what turning it on will do and asks; the switch is the
@@ -12,13 +11,10 @@ import type { SkillsSessionSource } from './skillsSubscription.ts';
  * **Skills** is what this deployment can already resolve. It needs neither the
  * switch nor the network.
  *
- * A section (rather than a tab inside the official Plugins page) is what makes
- * the hand-off complete: the settings shell hands every section a `close`,
- * so staging the prompt can end with the user looking at the session it was
- * staged in.
+ * Each host supplies a close callback to reveal the conversation after staging.
  */
 import { type ReactElement } from 'react';
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots';
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots';
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store';
 import type { MarketCatalog, MarketInstalledResult, MarketSkillsResult, SafeMarketSettings } from '../contract.ts';
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
@@ -110,6 +106,8 @@ export interface MarketSectionInjected {
     uninstallInstalled: (packageName: string) => Promise<MarketInstalledResult>;
 }
 /** Full section props: runtime share + injected face + locale seat. */
-export type MarketSectionProps = PropsRuntime<'settings.section'> & InjectFace<MarketSectionInjected> & PropsLocale<'settings.safeMarket'>;
+export type MarketSectionProps = {
+    close: () => void;
+} & InjectFace<MarketSectionInjected> & PropsLocale<'settings.safeMarket'>;
 /** The Marketplace section. */
 export declare function MarketSection({ useScope, setEnabled, loadCatalog, listSkills, skillsSession, install, installIntoNewWorkspace, chooseWorkspace, workspaceReadiness, listInstalled, setInstalledEnabled, uninstallInstalled, close, t, }: MarketSectionProps): ReactElement;

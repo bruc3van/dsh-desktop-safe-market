@@ -2,6 +2,8 @@ import type { Context } from '@deepseek-ai/cordis'
 import type { PropsRuntime, PropsLocale, InjectFace } from '@deepseek-ai/dsh-client-ui-slots'
 import type { SidebarRightTabDefinition } from '@deepseek-ai/dsh-client-ui-sidebar-right/client'
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
+import type {} from '@deepseek-ai/dsh-client-ui-sidebar/client'
+import type {} from '@deepseek-ai/dsh-client-ui-layout/client'
 import { MarketSection, type MarketSectionInjected } from './MarketSection.tsx'
 
 export const MARKET_TAB_ID = 'dsh-desktop-safe-market'
@@ -18,6 +20,31 @@ export function MarketSidebar({ useTabInfo, ...props }: MarketSidebarProps) {
   </div>
 }
 
+type MarketMainProps = PropsRuntime<'main'>
+  & InjectFace<MarketSectionInjected & { close: () => void }> & PropsLocale<typeof NS>
+
+/** The global page shares the shared install hand-off. */
+export function MarketMain(props: MarketMainProps) {
+  return <div className="dsh_market_main"><MarketSection {...props} /></div>
+}
+
+/** Publish the navigation row only while its destination slot is available. */
+export function registerMarketNavigation(ctx: Context, injectMarket: () => MarketSectionInjected): void {
+  ctx.inject(['layout'], (panelCtx) => {
+    const t = panelCtx.locale.bind(NS)
+    panelCtx.effect(() => panelCtx.slots.inject('main', () => {
+      const disposeMain = panelCtx.slots.register({
+        name: 'main', key: MARKET_TAB_ID, locale: NS,
+        inject: () => ({ ...injectMarket(), close: () => panelCtx.layout.selectPanel(null) }),
+      }, MarketMain)
+      const disposeRow = panelCtx.slots.inject('sidebar.panellist', () => panelCtx.slots.register({
+        name: 'sidebar.panellist', id: MARKET_TAB_ID, order: 60, label: () => t('nav'),
+      }, MarketIcon))
+      return () => { disposeRow(); disposeMain() }
+    }), 'safe-market: left navigation')
+  })
+}
+
 function MarketIcon({ size = 24, className }: { size?: number; className?: string }) {
   return <svg width={size} height={size} className={className} viewBox="0 0 24 24"
     fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -25,7 +52,7 @@ function MarketIcon({ size = 24, className }: { size?: number; className?: strin
   </svg>
 }
 
-/** An optional child fiber keeps settings available without the right Sidebar. */
+/** An optional child fiber keeps left navigation available without the right Sidebar. */
 export function registerMarketSidebar(ctx: Context, injectMarket: () => MarketSectionInjected): void {
   ctx.inject(['sidebarRightTabs'], (sidebarCtx) => {
     const t = sidebarCtx.locale.bind(NS)

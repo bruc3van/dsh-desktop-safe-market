@@ -1,7 +1,6 @@
 import type { SkillsSessionSource } from './skillsSubscription.ts'
 /**
- * The Marketplace settings section: its own entry in the Settings navigation,
- * with two pages of its own.
+ * The shared Marketplace surface, with Plugins and Skills pages.
  *
  * **Plugins** is the community shortlist. While the market is off it is one
  * card that says what turning it on will do and asks; the switch is the
@@ -12,16 +11,13 @@ import type { SkillsSessionSource } from './skillsSubscription.ts'
  * **Skills** is what this deployment can already resolve. It needs neither the
  * switch nor the network.
  *
- * A section (rather than a tab inside the official Plugins page) is what makes
- * the hand-off complete: the settings shell hands every section a `close`,
- * so staging the prompt can end with the user looking at the session it was
- * staged in.
+ * Each host supplies a close callback to reveal the conversation after staging.
  */
 import {
   useCallback, useEffect, useId, useMemo, useRef, useState, useSyncExternalStore,
   type KeyboardEvent as ReactKeyboardEvent, type ReactElement,
 } from 'react'
-import type { InjectFace, PropsLocale, PropsRuntime } from '@deepseek-ai/dsh-client-ui-slots'
+import type { InjectFace, PropsLocale } from '@deepseek-ai/dsh-client-ui-slots'
 import type { ObservableSnapshot } from '@deepseek-ai/dsh-client-store'
 import type {
   MarketCatalog,
@@ -38,6 +34,9 @@ import {
   INSTALLED_FILTER, SELF_CARD_KEY, SELF_MARKET_PLUGIN, installedUpdateCardKey, matches, starCount, stateOf,
 } from './rows.ts'
 import { SkillsView } from './SkillsView.tsx'
+import { MarketMoreActions } from './MarketMoreActions.tsx'
+import { BackToTop } from './BackToTop.tsx'
+import { useSearchDock } from './useSearchDock.ts'
 
 /** The live snapshot the section renders from: the switch plus the deployment facts. */
 export interface SafeMarketSnapshot {
@@ -111,7 +110,7 @@ export interface MarketSectionInjected {
 
 /** Full section props: runtime share + injected face + locale seat. */
 export type MarketSectionProps =
-  PropsRuntime<'settings.section'>
+  { close: () => void }
   & InjectFace<MarketSectionInjected>
   & PropsLocale<'settings.safeMarket'>
 
@@ -616,7 +615,6 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
       <div className="dsh_market_page">
         <div className="dsh_market_intro">
           <p className="dsh_market_introTitle">{t('intro.title')}</p>
-          <p className="dsh_market_introSlogan">{t('intro.slogan')}</p>
           <p className="dsh_market_introBody">{t('intro.body')}</p>
           {switchError !== '' && <p className="dsh_market_status" data-error="true">{switchError}</p>}
           <div className="dsh_market_introActions">
@@ -699,10 +697,8 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
   }
 
   return (
-    <div className="dsh_market_page">
-      {/* The tagline persists past the switch: it is the market's own line,
-          and the enabled page is where most of the time is spent. */}
-      <p className="dsh_market_pageSlogan">{t('intro.slogan')}</p>
+    <div className="dsh_market_page dsh_market_fixedPage">
+      <div className="dsh_market_controls">
       {/* Says the prerequisite out loud before a click runs into it, and
           offers the same one action the cards do. It does not block browsing:
           the shortlist is worth reading without a workspace. */}
@@ -720,7 +716,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
           </button>
         </div>
       )}
-      <div className="dsh_market_bar">
+      <div className="dsh_market_bar dsh_market_dockable">
         <input
           className="dsh_market_search"
           type="search"
@@ -729,25 +725,23 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
           value={query}
           onChange={(event) => { setQuery(event.target.value) }}
         />
+      </div>
         <button
           type="button"
-          className="dsh_market_ghost"
+          className="dsh_market_headerAction dsh_market_refreshMarket"
           disabled={state.status === 'loading' || refreshing}
+          aria-busy={refreshing}
           onClick={() => { load(true) }}
         >
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 4v6h-6M20 10a8 8 0 1 0-1.7 7" />
+          </svg>
           {refreshing ? t('refreshing') : t('refresh')}
         </button>
-        <button
-          type="button"
-          className="dsh_market_ghost"
-          disabled={switching}
-          onClick={() => { toggle(false) }}
-        >
-          {switching ? t('intro.disabling') : t('intro.disable')}
-        </button>
-      </div>
       {switchError !== '' && <p className="dsh_market_status" data-error="true">{switchError}</p>}
 
+      </div>
+      <div className="dsh_market_results">
       <div className="dsh_market_chips">
         <button
           type="button"
@@ -914,6 +908,7 @@ function PluginsPage({ t, english, snapshot, setEnabled, loadCatalog, listInstal
           {state.status === 'ready' && state.stale ? ` · ${t('stale')}` : ''}
         </p>
       )}
+      </div>
     </div>
   )
 }
@@ -929,6 +924,7 @@ export function MarketSection({
   // prompt follow the same setting the rest of the copy does.
   const english = t('lang') === 'en'
   const [page, setPage] = useState<Page>('plugins')
+  const searchDock = useSearchDock(page)
   const [cards, setCards] = useState<Readonly<Record<string, CardState>>>({})
   const tabsId = useId()
   // Mirror of the card states for same-tick guards (the rendered copy lags a
@@ -1022,7 +1018,7 @@ export function MarketSection({
   }
 
   return (
-    <div className="dsh_market_section">
+    <div className="dsh_market_section" ref={searchDock.root} data-search-compact={searchDock.compact ? 'true' : undefined}>
       {/* The market's own version, where it is legible without scrolling. The
           installed panel does carry a row for the in-box seat now, but that
           row is one card among many and only exists while the seat is listed
@@ -1032,20 +1028,37 @@ export function MarketSection({
           {t('nav')}
           {isSafeVersion(snapshot.version) && <span className="dsh_market_selfVersion">{`v${snapshot.version}`}</span>}
         </h2>
+        <MarketMoreActions label={t('header.more')}>
         <button
           type="button"
           className="dsh_market_headerAction"
           disabled={snapshot.profile === null || installBusy}
           onClick={runSelfUpgrade}
         >
-          <span aria-hidden="true">↻</span>
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M12 17V3M6 9l6-6 6 6M4 17v4h16v-4" />
+          </svg>
           {selfUpgrade?.status === 'picking'
             ? t('install.picking')
             : selfUpgrade?.status === 'busy'
               ? t('installing')
               : t('self.upgrade')}
         </button>
+        <a className="dsh_market_headerAction" href="https://github.com/bruc3van/dsh-desktop-safe-market" target="_blank" rel="noopener noreferrer">
+          <svg width="14" height="14" viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M9 19c-4.3 1.3-4.3-2.2-6-2.7M15 22v-3.8a3.3 3.3 0 0 0-.9-2.5c3-.3 6.2-1.5 6.2-6.9a5.4 5.4 0 0 0-1.5-3.8 5 5 0 0 0-.1-3.8s-1.2-.4-3.9 1.4a13.4 13.4 0 0 0-7 0C5.1.8 3.9 1.2 3.9 1.2A5 5 0 0 0 3.8 5a5.4 5.4 0 0 0-1.5 3.8c0 5.4 3.2 6.6 6.2 6.9a3.3 3.3 0 0 0-.9 2.5V22" />
+          </svg>
+          {t('header.repository')}
+        </a>
+        <a className="dsh_market_headerAction" href="https://x.com/bruc3van" target="_blank" rel="noopener noreferrer">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" aria-hidden="true">
+            <path d="M4 3h4l12 18h-4L4 3ZM20 3l-7 8M4 21l7-8" />
+          </svg>
+          {t('header.contact')}
+        </a>
+        </MarketMoreActions>
       </div>
+      <p className="dsh_market_subtitle">{t('intro.slogan')}</p>
       {(selfUpgrade?.status === 'error' || selfUpgrade?.status === 'needs-workspace') && (
         <p className="dsh_market_status" data-error={selfUpgrade.status === 'error' ? 'true' : undefined}>
           {selfUpgrade.message}
@@ -1076,6 +1089,7 @@ export function MarketSection({
           the live skill list. */}
       <div
         id={`${tabsId}-panel-plugins`}
+        className="dsh_market_scroll"
         role="tabpanel"
         aria-labelledby={`${tabsId}-tab-plugins`}
         hidden={page !== 'plugins'}
@@ -1099,12 +1113,14 @@ export function MarketSection({
       {page === 'skills' && (
         <div
           id={`${tabsId}-panel-skills`}
+          className="dsh_market_scroll"
           role="tabpanel"
           aria-labelledby={`${tabsId}-tab-skills`}
         >
           <SkillsView t={t} listSkills={listSkills} skillsSession={skillsSession} />
         </div>
       )}
+      <BackToTop root={searchDock.root} page={page} label={t('backToTop')} />
     </div>
   )
 }

@@ -49,11 +49,12 @@ export function SkillsView({ t, listSkills, skillsSession }: {
     : result.skills.filter(skill => matchesSkill(skill, needle))
 
   return (
-    <div className="dsh_market_page">
+    <div className="dsh_market_page dsh_market_fixedPage">
+      <div className="dsh_market_controls">
       <p className="dsh_market_skillsTitle">{t('skills.title')}</p>
 
       {result !== null && result.skills.length > 0 && (
-        <div className="dsh_market_bar">
+        <div className="dsh_market_bar dsh_market_dockable">
           <input
             className="dsh_market_search"
             type="search"
@@ -65,6 +66,8 @@ export function SkillsView({ t, listSkills, skillsSession }: {
         </div>
       )}
 
+      </div>
+      <div className="dsh_market_results">
       {state.status === 'loading' || (result !== null && result.error === SESSIONS_PENDING)
         ? (
           <div className="dsh_market_notice" aria-busy="true" aria-live="polite">
@@ -107,6 +110,7 @@ export function SkillsView({ t, listSkills, skillsSession }: {
           ))}
         </ul>
       )}
+      </div>
     </div>
   )
 }

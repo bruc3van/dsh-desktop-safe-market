@@ -50,8 +50,9 @@ test('the client manifest names its DSH Controller and UI dependencies', async (
     '@deepseek-ai/dsh-api-workspace-controller',
     '@deepseek-ai/dsh-client-locale',
     '@deepseek-ai/dsh-client-ui-conversation',
+    '@deepseek-ai/dsh-client-ui-layout',
     '@deepseek-ai/dsh-client-ui-renderer',
-    '@deepseek-ai/dsh-client-ui-settings',
+    '@deepseek-ai/dsh-client-ui-sidebar',
     '@deepseek-ai/dsh-client-ui-sidebar-right',
     '@deepseek-ai/dsh-client-ui-workspace',
   ])

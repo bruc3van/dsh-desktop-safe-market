@@ -14,21 +14,98 @@ export const STYLE_ID = 'dsh-desktop-safe-market-style'
 
 /** The market tab's injected stylesheet text. */
 export const cssText = `
+.dsh_market_main {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
+  padding: 24px;
+}
+.dsh_market_main > .dsh_market_section { margin: 0 auto; }
 .dsh_market_sidebar {
   height: 100%;
   min-height: 0;
-  overflow: auto;
+  overflow: hidden;
   box-sizing: border-box;
   padding: 16px;
 }
 .dsh_market_section {
+  position: relative;
   display: flex;
   flex-direction: column;
+  height: 100%;
+  min-height: 0;
   gap: 12px;
   max-width: 760px;
   color: var(--dsw-alias-label-primary);
 }
+.dsh_market_section > :not(.dsh_market_scroll) { flex-shrink: 0; }
+/* Only the selected panel scrolls; the shared heading and tabs stay visible. */
+.dsh_market_scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  scrollbar-gutter: stable;
+  padding-right: 4px;
+}
+/* The inner results own the only scrollbar gutter in a fixed page. */
+.dsh_market_scroll:has(> .dsh_market_fixedPage) {
+  overflow: hidden;
+  scrollbar-gutter: auto;
+  padding-right: 0;
+}
+.dsh_market_fixedPage {
+  height: 100%;
+  min-height: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+}
+.dsh_market_controls,
+.dsh_market_results {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.dsh_market_controls { flex: none; max-height: 60%; overflow: auto; }
+.dsh_market_controls:has(> .dsh_market_dockable) { overflow: visible; }
+.dsh_market_dockable { box-sizing: border-box; transform-origin: top left; }
+.dsh_market_section[data-search-compact="true"] > .dsh_market_tabs { padding-right: min(360px, 60%); }
+.dsh_market_section[data-search-compact="true"] [role="tabpanel"]:not([hidden]) .dsh_market_dockable {
+  position: absolute;
+  z-index: 2;
+  right: 0;
+  width: min(360px, 60%);
+}
+.dsh_market_results {
+  flex: 1;
+  min-height: 0;
+  box-sizing: border-box;
+  padding-right: 12px;
+  padding-bottom: 56px;
+  overflow: auto;
+  scrollbar-gutter: stable;
+}
+.dsh_market_backToTop {
+  position: absolute;
+  right: 24px;
+  bottom: 12px;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 50%;
+  background: var(--dsw-alias-bg-layer-3);
+  color: var(--dsw-alias-label-secondary);
+  cursor: pointer;
+}
+.dsh_market_backToTop:hover { background: var(--dsw-alias-interactive-bg-hover); color: var(--dsw-alias-label-primary); }
+.dsh_market_backToTop:focus-visible { outline: 2px solid var(--dsw-alias-state-business-primary); outline-offset: 2px; }
 .dsh_market_skillSource { overflow-wrap: anywhere; }
+.dsh_market_subtitle,
 .dsh_market_skillsTitle {
   margin: 0;
   font-size: 13px;
@@ -37,15 +114,43 @@ export const cssText = `
   color: var(--dsw-alias-label-tertiary);
 }
 .dsh_market_headingRow {
+  padding-right: 148px;
   display: flex;
-  align-items: baseline;
+  flex-wrap: wrap;
+  align-items: center;
   gap: 16px;
   min-width: 0;
 }
+.dsh_market_refreshMarket {
+  position: absolute;
+  top: 0;
+  right: 36px;
+  z-index: 2;
+}
+.dsh_market_more { position: absolute; top: 0; right: 0; z-index: 5; }
+.dsh_market_moreTrigger { list-style: none; justify-content: center; width: 28px; }
+.dsh_market_moreTrigger::-webkit-details-marker { display: none; }
+.dsh_market_morePanel {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--dsw-alias-border-l2);
+  border-radius: 8px;
+  background: var(--dsw-alias-bg-layer-3);
+}
+.dsh_market_morePanel > .dsh_market_headerAction { height: 34px; padding: 6px 10px; }
+.dsh_market_more:not([open]) > .dsh_market_morePanel { display: none; }
 .dsh_market_headerAction {
+  box-sizing: border-box;
+  height: 26px;
+  text-decoration: none;
   display: inline-flex;
   align-items: center;
-  gap: 5px;
+  gap: 6px;
   flex: none;
   padding: 2px 4px;
   border: 0;
@@ -54,9 +159,21 @@ export const cssText = `
   color: var(--dsw-alias-label-tertiary);
   font: inherit;
   font-size: 12px;
+  font-weight: 400;
   line-height: 18px;
   white-space: nowrap;
   cursor: pointer;
+}
+.dsh_market_headerAction > svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 .dsh_market_headerAction:hover:not(:disabled) {
   background: var(--dsw-alias-interactive-bg-hover);
@@ -88,6 +205,8 @@ export const cssText = `
 }
 /* The section's own page strip, in the official tab language. */
 .dsh_market_tabs {
+  min-height: 38px;
+  box-sizing: border-box;
   display: flex;
   align-items: flex-end;
   gap: 22px;
@@ -149,14 +268,6 @@ export const cssText = `
   font-size: 14px;
   font-weight: 600;
   line-height: 22px;
-}
-.dsh_market_introSlogan,
-.dsh_market_pageSlogan {
-  margin: 0;
-  font-size: 14px;
-  font-weight: 600;
-  line-height: 22px;
-  color: var(--dsw-alias-label-primary);
 }
 .dsh_market_introBody,
 .dsh_market_disclaimer {

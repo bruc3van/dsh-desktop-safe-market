@@ -1,7 +1,7 @@
 /**
  * dsh-desktop-safe-market client plugin: the browser half of the safe plugin
  * marketplace. Mounts the safeMarket Remote namespace, contributes the
- * Marketplace tab to the Plugins settings section, and owns the install
+ * market pages to the left navigation and right sidebar, and owns the install
  * hand-off — which opens a session in the current or most recent workspace and
  * stages a security-review prompt in its composer.
  *
@@ -17,8 +17,6 @@ import type { Context as ClientContext } from '@deepseek-ai/cordis'
 import type {} from '@deepseek-ai/dsh-client-locale/client'
 // Type-only: pulls the SlotRegistry service merge (ctx.slots).
 import type {} from '@deepseek-ai/dsh-client-ui-renderer/client'
-// Type-only: brings the settings SlotMap declarations (settings.plugins.tab) in.
-import type {} from '@deepseek-ai/dsh-client-ui-settings/client'
 import type { IConversation } from '@deepseek-ai/dsh-client-ui-conversation/client'
 import type {
   MarketCatalogResult,
@@ -30,7 +28,6 @@ import type {
 } from '../contract.ts'
 import { SAFE_MARKET_REMOTE } from './remote.ts'
 import {
-  MarketSection,
   type ChooseWorkspaceOutcome,
   type InstallOutcome,
   type MarketSectionInjected,
@@ -38,9 +35,8 @@ import {
 } from './MarketSection.tsx'
 import { NO_SESSION, SESSIONS_PENDING } from './SkillsView.tsx'
 import { en, zh, type SafeMarketLocaleKey } from './locales.ts'
-import { adoptNavIcon } from './navIcon.ts'
 import { adoptStyles } from './styles.ts'
-import { registerMarketSidebar } from './sidebar.tsx'
+import { registerMarketNavigation, registerMarketSidebar } from './sidebar.tsx'
 import {
   type MarketUiWorkspace,
   type MarketWorkspaces,
@@ -125,9 +121,6 @@ function wait(ms: number): Promise<void> {
 export function apply(ctx: ClientContext): void {
   ctx.effect(() => adoptStyles(), 'dsh-desktop-safe-market: styles')
   ctx.effect(() => ctx.locale.register(NS, { zh, en }), 'dsh-desktop-safe-market: dictionaries')
-  // The settings shell hardcodes section nav icons by id (unknown ids get the
-  // gear); re-skin this section's row with the market's own storefront.
-  ctx.effect(() => adoptNavIcon(), 'dsh-desktop-safe-market: nav icon')
 
   const scope = createMarketStore({ value: defaultSettings(), profile: null as string | null, version: '' })
   let settingsGeneration = 0
@@ -410,8 +403,6 @@ export function apply(ctx: ClientContext): void {
     },
   }
 
-  const t = ctx.locale.bind(NS)
-
   const injectMarket = (): MarketSectionInjected => ({
     hooks: { scope },
     setEnabled,
@@ -428,19 +419,6 @@ export function apply(ctx: ClientContext): void {
   })
 
   registerMarketSidebar(ctx, injectMarket)
+  registerMarketNavigation(ctx, injectMarket)
 
-  // A section of its own rather than a tab inside the official Plugins page:
-  // the settings shell hands every section a `close`, and closing is the
-  // second half of the install hand-off (the prompt is staged in a session
-  // this window is covering).
-  ctx.slots.inject('settings.section', () => ctx.slots.register({
-    name: 'settings.section',
-    id: 'safe-market',
-    // After the shipped sections (General 0, Plugins 15, …), beside the
-    // other feature-owned entries.
-    order: 60,
-    label: () => t('nav'),
-    locale: NS,
-    inject: injectMarket,
-  }, MarketSection))
 }

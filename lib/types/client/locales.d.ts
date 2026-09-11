@@ -33,7 +33,7 @@ export declare const zh: {
     readonly 'tab.skills': "技能";
     readonly 'tabs.aria': "安全市场分区";
     readonly 'intro.title': "安全市场";
-    readonly 'intro.slogan': "先审查，再安装。";
+    readonly 'intro.slogan': "主打安全，提倡先审查再安装的 DeepSeek Harness 市场。深度扫描 5 分钟，放心使用每一天。";
     readonly 'intro.body': "社区插件来自 awesome-dsh-plugin，每日更新，启用后联网读取目录。点击「安全安装」生成审查提示词，由你发送后交给 Agent 审查：有疑点先询问，通过后安装并报告。收录和审查均不保证安全。";
     readonly 'intro.enable': "启用安全市场";
     readonly 'intro.enabling': "正在启用…";
@@ -43,7 +43,7 @@ export declare const zh: {
     readonly 'intro.disableFailed': "停用失败：{reason}";
     readonly search: "搜索插件名称、简介或分类";
     readonly all: "全部";
-    readonly refresh: "刷新";
+    readonly refresh: "刷新市场";
     readonly refreshing: "刷新中…";
     readonly loading: "正在读取社区插件目录，请稍候…";
     readonly empty: "没有符合当前筛选的插件";
@@ -56,7 +56,11 @@ export declare const zh: {
     readonly stars: "star";
     readonly install: "安全安装";
     readonly upgrade: "安全升级";
-    readonly 'self.upgrade': "安全升级市场";
+    readonly 'self.upgrade': "升级市场插件";
+    readonly 'header.more': "更多操作";
+    readonly backToTop: "回到顶部";
+    readonly 'header.repository': "GitHub 仓库";
+    readonly 'header.contact': "联系作者";
     readonly installedHere: "已安装 v{version}";
     readonly installedHereUnknown: "已安装";
     readonly installing: "正在打开会话…";
